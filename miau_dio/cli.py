@@ -149,6 +149,21 @@ def cmd_new(a):
         _play(str(out))
 
 
+def cmd_edit(a):
+    """Open an idea's .abc in the editor; invalidates audio cache on save."""
+    i = store.get(a.id)
+    abc = store.abc_path(a.id)
+    editor = os.environ.get("EDITOR") or ("nvim" if shutil.which("nvim") else "nano")
+    before = abc.read_text()
+    subprocess.run([editor, str(abc)], check=True)
+    after = abc.read_text()
+    if after != before:
+        store.audio_path(a.id).unlink(missing_ok=True)
+        print(f"[{a.id}] {i.name} updated (audio cache cleared)")
+    else:
+        print(f"[{a.id}] {i.name} unchanged")
+
+
 def cmd_selftest(a):
     """Exercise every operation on a throwaway idea, then clean up."""
     import tempfile
@@ -312,6 +327,10 @@ def build_parser() -> argparse.ArgumentParser:
     cset.add_argument("field")
     cset.add_argument("value")
     cset.set_defaults(func=cmd_config_set)
+
+    s = sub.add_parser("edit", help="open an idea in the editor")
+    s.add_argument("id")
+    s.set_defaults(func=cmd_edit)
 
     s = sub.add_parser("selftest", help="run an internal self-check")
     s.add_argument("--full", action="store_true", help="also test audio render")

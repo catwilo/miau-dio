@@ -1,6 +1,9 @@
 """miau-dio CLI: prototype, store and replay musical ideas from the console."""
 import json as _json
+import os
+import pathlib as _pl
 import subprocess
+import tempfile as _tempfile
 
 import typer
 
@@ -8,8 +11,9 @@ from miau_dio.backends.backend import BACKENDS, PROFILES, is_installed
 from miau_dio.installer.installer import ensure
 from miau_dio.pipeline import pipeline
 from miau_dio.store import store
+from miau_dio.config import config
 
-app = typer.Typer(help="miau-dio: prototype and manage musical ideas in the console")
+app = typer.Typer(help="miau-dio: prototype and manage musical ideas in the console", rich_markup_mode=None, pretty_exceptions_enable=False)
 
 
 @app.command()
@@ -133,3 +137,65 @@ def delete(iid: str, yes: bool = typer.Option(False, "--yes", "-y")):
 def tags():
     """List all tags currently in use."""
     typer.echo(" ".join(f"#{t}" for t in sorted(store.all_tags())) or "-")
+
+
+config_app = typer.Typer(help="Manage default key/meter/unit for new ideas")
+app.add_typer(config_app, name="config")
+
+
+@config_app.command("show")
+def config_show():
+    """Show current defaults for new ideas."""
+    for k, v in config.load().items():
+        typer.echo(f"{k}: {v}")
+
+
+@config_app.command("set")
+def config_set(field: str, value: str):
+    """Set a persistent default (key, meter or unit)."""
+    config.set_value(field, value)
+    typer.echo(f"{field} = {value}")
+
+
+@app.command()
+def new(name: str,
+        key: str = typer.Option(None, "--key", help="ABC key, e.g. Am"),
+        meter: str = typer.Option(None, "--meter", help="ABC meter, e.g. 3/4"),
+        unit: str = typer.Option(None, "--unit", help="ABC default note length"),
+        tag: list[str] = typer.Option([], "--tag", "-t"),
+        note: str = typer.Option("", "--note", "-n"),
+        bpm: str = typer.Option(None, "--bpm", help="tempo in BPM, e.g. 90"),
+        silent: bool = typer.Option(False, "--silent", help="do not play after save")):
+    """Create an idea: edit a template, then save and play it.
+
+    key/meter/unit fall back to stored defaults (config) then factory.
+    """
+    d = config.load()
+    key = key or d["key"]
+    meter = meter or d["meter"]
+    unit = unit or d["unit"]
+    bpm = bpm or d["bpm"]
+    template = f"X:1\nT:{name}\nM:{meter}\nL:{unit}\nQ:1/4={bpm}\nK:{key}\n"
+    editor = os.environ.get("EDITOR") or ("nvim" if __import__("shutil").which("nvim") else "nano")
+    with _tempfile.NamedTemporaryFile("w", suffix=".abc", delete=False) as f:
+        f.write(template)
+        tmp_path = f.name
+    subprocess.run([editor, tmp_path], check=True)
+    edited = _pl.Path(tmp_path).read_text()
+    body = "\n".join(
+        l for l in edited.splitlines()
+        if l and l[:2] not in ("X:", "T:", "M:", "L:", "K:")
+    )
+    if not body.strip():
+        _pl.Path(tmp_path).unlink(missing_ok=True)
+        typer.echo("Empty idea, nothing saved.")
+        raise typer.Exit()
+    idea = store.add(name, tmp_path, list(tag), note)
+    _pl.Path(tmp_path).unlink(missing_ok=True)
+    typer.echo(f"Saved [{idea.id}] {idea.name}")
+    if not silent:
+        ensure(["abcmidi", "timidity"], auto=True)
+        out = store.audio_path(idea.id)
+        pipeline.render(str(store.abc_path(idea.id)), str(out))
+        from miau_dio.platform.platform import audio_player
+        subprocess.run([*audio_player(), str(out)], check=True)

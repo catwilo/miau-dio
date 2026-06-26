@@ -57,6 +57,7 @@ Genera el comando `miau-dio`, compila `abc2midi` desde fuentes incluidas, instal
 - `note <id> "texto"` — reemplaza notas
 - `rename <id> "nombre"` — renombra (id no cambia)
 - `duplicate <id> --name "v2"` — copia independiente
+- `edit <id>` — abre el `.abc` en nvim (fallback nano), limpia caché de audio si hubo cambios
 - `delete <id> -y` — borra idea y audio
 
 **Configuración** (defaults persistentes para `new`)

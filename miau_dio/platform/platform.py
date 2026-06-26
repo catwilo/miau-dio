@@ -14,7 +14,7 @@ def pkg_install_cmd() -> list[str]:
     if is_termux():
         return ["pkg", "install", "-y"]
     if shutil.which("apt"):
-        return ["sudo", "apt", "install", "-y"]
+        return ["sudo", "apt", "install", "-y", "--no-install-recommends"]
     raise RuntimeError("unsupported platform: no pkg or apt found")
 
 

@@ -9,7 +9,6 @@ import os
 import shutil
 import subprocess
 
-import typer
 
 from miau_dio.backends.backend import BACKENDS, Backend, is_installed
 from miau_dio.platform.platform import (
@@ -75,10 +74,10 @@ def ensure(names: list[str], auto: bool = False) -> None:
         b = BACKENDS[name]
         if is_installed(b):
             continue
-        if auto or typer.confirm(f"{b.name} is missing. Install?"):
+        if auto or input(f"{b.name} is missing. Install? [y/N] ").lower() == "y":
             install(name)
         else:
-            raise typer.Abort()
+            raise SystemExit("aborted")
     # timidity always needs the SoundFont present to produce audio.
     if "timidity" in names:
         install_soundfont()

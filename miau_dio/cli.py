@@ -149,6 +149,78 @@ def cmd_new(a):
         _play(str(out))
 
 
+def cmd_selftest(a):
+    """Exercise every operation on a throwaway idea, then clean up."""
+    import tempfile
+    results = []
+
+    def check(label, fn):
+        try:
+            fn()
+            results.append((label, True, ""))
+        except Exception as e:
+            results.append((label, False, str(e)))
+
+    state = {}
+
+    def _save():
+        f = tempfile.NamedTemporaryFile("w", suffix=".abc", delete=False)
+        f.write("X:1\nT:selftest\nM:4/4\nL:1/4\nK:C\nC E G c|\n")
+        f.close()
+        state["abc"] = f.name
+        idea = store.add("__selftest__", f.name, ["t1", "t2"], "note")
+        state["id"] = idea.id
+
+    check("save", _save)
+    check("get/show", lambda: store.get(state["id"]))
+    check("tag add/rm", lambda: store.update(
+        state["id"], tags=sorted((set(["t1", "t2"]) | {"t3"}) - {"t2"})))
+    check("note", lambda: store.update(state["id"], notes="updated"))
+    check("rename", lambda: store.update(state["id"], name="__selftest_renamed__"))
+    check("search", lambda: store.search("selftest", ""))
+    check("all_tags", lambda: store.all_tags())
+
+    def _dup():
+        d = store.duplicate(state["id"], "__selftest_dup__")
+        state["dup"] = d.id
+    check("duplicate", _dup)
+
+    check("config load", lambda: config.load())
+    check("config set/restore", lambda: (
+        config.set_value("bpm", config.get("bpm"))))
+
+    if a.full:
+        def _render():
+            ensure(["abcmidi", "timidity"], auto=True)
+            out = store.audio_path(state["id"])
+            pipeline.render(str(store.abc_path(state["id"])), str(out))
+            if not out.exists() or out.stat().st_size < 1000:
+                raise RuntimeError("render produced no audio")
+        check("render (full)", _render)
+
+    # cleanup
+    for key in ("id", "dup"):
+        if key in state:
+            try:
+                store.remove(state[key])
+            except Exception:
+                pass
+    if "abc" in state:
+        import pathlib
+        pathlib.Path(state["abc"]).unlink(missing_ok=True)
+
+    ok = sum(1 for _, p, _ in results if p)
+    for label, passed, err in results:
+        mark = "ok  " if passed else "FAIL"
+        line = f"[{mark}] {label}"
+        if err:
+            line += f"  -> {err}"
+        print(line)
+    print(f"{ok}/{len(results)} passed")
+    if ok != len(results):
+        raise SystemExit(1)
+
+
 # ---- parser -----------------------------------------------------------------
 
 def build_parser() -> argparse.ArgumentParser:
@@ -240,6 +312,10 @@ def build_parser() -> argparse.ArgumentParser:
     cset.add_argument("field")
     cset.add_argument("value")
     cset.set_defaults(func=cmd_config_set)
+
+    s = sub.add_parser("selftest", help="run an internal self-check")
+    s.add_argument("--full", action="store_true", help="also test audio render")
+    s.set_defaults(func=cmd_selftest)
 
     return p
 

@@ -6,3 +6,4 @@ dist/
 .venv/
 *.wav
 *.mid
+_build_tmp/

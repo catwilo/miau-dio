@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# bin/miau-dio -- launcher for the miau-dio package.
+#
+# Runs the package as a module with the repo on PYTHONPATH. Installed as a
+# symlink by install.sh (toolkit standard: symlink, never copy), so a git
+# pull updates the tool with no reinstall.
+_self="$0"
+case "$_self" in */*) ;; *) _self="$(command -v "$_self")" ;; esac
+if _real="$(readlink -f "$_self" 2>/dev/null)" && [ -n "$_real" ]; then
+    _self="$_real"
+else
+    while [ -L "$_self" ]; do
+        _link="$(readlink "$_self")"
+        case "$_link" in /*) _self="$_link" ;; *) _self="$(dirname "$_self")/$_link" ;; esac
+    done
+fi
+REPO="$(cd "$(dirname "$_self")/.." && pwd -P)"
+export PYTHONPATH="$REPO${PYTHONPATH:+:$PYTHONPATH}"
+exec python3 -m miau_dio "$@"

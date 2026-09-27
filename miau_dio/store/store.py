@@ -57,8 +57,15 @@ def _save(idx: dict[str, dict]) -> None:
     tmp.replace(INDEX)
 
 
-def _gen_id(name: str) -> str:
-    return hashlib.sha1(f"{name}{_now()}".encode()).hexdigest()[:8]
+def _gen_id() -> str:
+    """Return a fresh 8-hex-char id derived from os.urandom.
+
+    The value is independent of the idea name and of wall-clock time, so
+    two ideas with the same name created within the same second never
+    collide. This is required by add() and duplicate() to guarantee the
+    uniqueness contract stated in the module docstring.
+    """
+    return os.urandom(4).hex()
 
 
 def abc_path(iid: str) -> pathlib.Path:
@@ -75,7 +82,7 @@ def add(name: str, abc_file: str, tags: list[str], notes: str) -> Idea:
     if not src.is_file():
         raise FileNotFoundError(f"abc file not found: {abc_file}")
     text = src.read_text()
-    iid = _gen_id(name)
+    iid = _gen_id()
     abc_path(iid).write_text(text)
     idea = Idea(
         id=iid, name=name, tags=tags, notes=notes,
@@ -121,7 +128,7 @@ def duplicate(iid: str, new_name: str | None = None) -> Idea:
     """Copy an idea into an independent variation with a fresh id."""
     src = get(iid)
     text = abc_path(iid).read_text()
-    new_id = _gen_id(src.name)
+    new_id = _gen_id()
     abc_path(new_id).write_text(text)
     dup = Idea(
         id=new_id,

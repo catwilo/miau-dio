@@ -15,9 +15,14 @@ Modes:
             lives on its own line preceded by its directive; this is
             required because %%MIDI directives are line-scoped in ABC.
 
+Fixed mode also accepts at=<note_index> (0-based, post-header): the
+directive is placed only before the note at that index. The target
+note is moved to its own line so the directive stays line-scoped,
+leaving the rest of the source line in place.
+
 Public API:
   annotate(text, mode, *, program=None, programs=None, rng=None,
-           min_duration=None) -> str
+           min_duration=None, at=None) -> str
   AssignmentError -- raised on invalid input
 """
 from __future__ import annotations
@@ -81,6 +86,24 @@ def _render_note(note: Note) -> str:
     return f"{note.accidental}{note.pitch}{octaves}{note.duration}"
 
 
+def _scan_note_end(line: str, start: int) -> int:
+    """Return the exclusive end index of the note token starting at `start`."""
+    i = start
+    n = len(line)
+    while i < n and line[i] in "^_=":
+        i += 1
+    if i >= n or not line[i].isalpha():
+        raise AssignmentError(
+            f"internal error: cannot rescan note starting at col {start + 1}"
+        )
+    i += 1
+    while i < n and line[i] in "',":
+        i += 1
+    while i < n and (line[i].isdigit() or line[i] == "/"):
+        i += 1
+    return i
+
+
 def _fixed_annotate(text: str, program: int) -> str:
     _validate_program(program)
     k_line = _body_start_line(text)
@@ -92,6 +115,41 @@ def _fixed_annotate(text: str, program: int) -> str:
         insertion_index += 1
     out = lines[:insertion_index] + [directive] + lines[insertion_index:]
     return "\n".join(out) + ("\n" if text.endswith("\n") else "")
+
+
+def _at_annotate(text: str, program: int, note_index: int) -> str:
+    """Insert %%MIDI program <n> immediately before the note at note_index.
+
+    The target note is moved to its own line so the directive is
+    line-scoped as ABC requires; the trailing part of the original line
+    (if any) stays attached to the note, preserving the visual layout.
+    """
+    _validate_program(program)
+    if isinstance(note_index, bool) or not isinstance(note_index, int):
+        raise AssignmentError(
+            f"at must be an int, got {type(note_index).__name__}"
+        )
+    score = parse(text)
+    if note_index < 0 or note_index >= len(score.notes):
+        raise AssignmentError(
+            f"at out of range: {note_index} "
+            f"(piece has {len(score.notes)} notes)"
+        )
+    target = score.notes[note_index]
+    lines = text.splitlines()
+    line = lines[target.line - 1]
+    start = target.col - 1
+    end = _scan_note_end(line, start)
+    before = line[:start].rstrip()
+    note_text = line[start:end]
+    after = line[end:]
+    new_lines: list[str] = []
+    if before:
+        new_lines.append(before)
+    new_lines.append(f"%%MIDI program {program}")
+    new_lines.append(note_text + after)
+    lines[target.line - 1:target.line] = new_lines
+    return "\n".join(lines) + ("\n" if text.endswith("\n") else "")
 
 
 def _resolve_pool(programs: list[int] | None,
@@ -149,7 +207,8 @@ def annotate(text: str, mode: str, *,
              program: int | None = None,
              programs: list[int] | None = None,
              rng: random.Random | None = None,
-             min_duration: float | None = None) -> str:
+             min_duration: float | None = None,
+             at: int | None = None) -> str:
     """Return new ABC text with %%MIDI program directives inserted.
 
     `mode` is "fixed" (one program for the whole piece) or "random"
@@ -157,6 +216,9 @@ def annotate(text: str, mode: str, *,
     `rng` accepts a seeded random.Random for reproducible output.
     `min_duration` is only meaningful in random mode; expressed in the
     same unit as durations ("1" = quarter in 1/4 unit).
+    `at` is only valid with fixed mode: 0-based note index (post-header)
+    before which the directive is placed, leaving the rest of the file
+    untouched.
     """
     if not isinstance(text, str):
         raise AssignmentError(
@@ -167,6 +229,12 @@ def annotate(text: str, mode: str, *,
     parse(text)
     if mode not in MODES:
         raise AssignmentError(f"mode must be one of {MODES}, got {mode!r}")
+    if at is not None:
+        if mode != FIXED:
+            raise AssignmentError("at= is only valid in fixed mode")
+        if program is None:
+            raise AssignmentError("at= requires program=<0-127>")
+        return _at_annotate(text, program, at)
     if mode == FIXED:
         if program is None:
             raise AssignmentError("fixed mode requires program=<0-127>")

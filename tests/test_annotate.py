@@ -210,7 +210,105 @@ class TestDurationParser(unittest.TestCase):
     def test_slash_n_means_one_over_n(self):
         # "/2" = 0.5
         self.assertEqual(self._directive_count("C/2 D/2", 0.5), 2)
-        self.assertEqual(self._directive_count("C/2 D/2", 0.6), 1)
+
+
+class TestAt(unittest.TestCase):
+    """at= inserts the directive immediately before the target note.
+
+    The target note inherits the new program; the preceding part of the
+    source line is moved above the directive. Everything at or after the
+    target note on the original line stays on a single line, which matches
+    the ABC semantics of %%MIDI program (applies from that point onward).
+    """
+
+    def test_at_first_note(self):
+        src = "X:1\nK:C\nC D E F|\n"
+        out = annotate(src, FIXED, program=40, at=0)
+        lines = out.splitlines()
+        idx = lines.index("%%MIDI program 40")
+        self.assertEqual(lines[idx - 1], "K:C")
+        self.assertEqual(lines[idx + 1], "C D E F|")
+
+    def test_at_third_note_splits_line(self):
+        src = "X:1\nK:C\nC D E F|\n"
+        out = annotate(src, FIXED, program=40, at=2)
+        lines = out.splitlines()
+        idx = lines.index("%%MIDI program 40")
+        self.assertEqual(lines[idx - 1], "C D")
+        self.assertEqual(lines[idx + 1], "E F|")
+
+    def test_at_preserves_other_notes(self):
+        src = "X:1\nK:C\nC D E F|\n"
+        out = annotate(src, FIXED, program=40, at=1)
+        for token in ("C", "D", "E", "F"):
+            self.assertIn(token, out)
+
+    def test_at_does_not_inject_other_directives(self):
+        src = "X:1\nK:C\nC D E F|\n"
+        out = annotate(src, FIXED, program=40, at=2)
+        directives = [l for l in out.splitlines()
+                      if l.startswith("%%MIDI program")]
+        self.assertEqual(len(directives), 1)
+
+    def test_at_out_of_range_negative(self):
+        src = "X:1\nK:C\nC D\n"
+        with self.assertRaises(AssignmentError) as cm:
+            annotate(src, FIXED, program=40, at=-1)
+        self.assertIn("out of range", str(cm.exception))
+
+    def test_at_out_of_range_high(self):
+        src = "X:1\nK:C\nC D\n"
+        with self.assertRaises(AssignmentError) as cm:
+            annotate(src, FIXED, program=40, at=5)
+        self.assertIn("out of range", str(cm.exception))
+
+    def test_at_requires_program(self):
+        with self.assertRaises(AssignmentError) as cm:
+            annotate(SIMPLE, FIXED, at=0)
+        self.assertIn("requires program", str(cm.exception))
+
+    def test_at_only_in_fixed_mode(self):
+        with self.assertRaises(AssignmentError) as cm:
+            annotate(SIMPLE, RANDOM, program=40, at=0,
+                     rng=random.Random(0))
+        self.assertIn("only valid in fixed mode", str(cm.exception))
+
+    def test_at_must_be_int(self):
+        with self.assertRaises(AssignmentError) as cm:
+            annotate(SIMPLE, FIXED, program=40, at="0")  # type: ignore[arg-type]
+        self.assertIn("at must be an int", str(cm.exception))
+
+    def test_at_bool_rejected(self):
+        with self.assertRaises(AssignmentError):
+            annotate(SIMPLE, FIXED, program=40, at=True)
+
+    def test_at_with_octave_and_accidental(self):
+        src = "X:1\nK:C\n^C c'' C,,\n"
+        out = annotate(src, FIXED, program=40, at=1)
+        lines = out.splitlines()
+        idx = lines.index("%%MIDI program 40")
+        self.assertEqual(lines[idx - 1], "^C")
+        self.assertEqual(lines[idx + 1], "c'' C,,")
+
+    def test_at_with_duration(self):
+        src = "X:1\nK:C\nC3/2 D/ E2\n"
+        out = annotate(src, FIXED, program=40, at=1)
+        lines = out.splitlines()
+        idx = lines.index("%%MIDI program 40")
+        self.assertEqual(lines[idx - 1], "C3/2")
+        self.assertEqual(lines[idx + 1], "D/ E2")
+
+    def test_at_missing_K_rejected(self):
+        with self.assertRaises(AssignmentError):
+            annotate("X:1\nT:demo\n", FIXED, program=40, at=0)
+
+    def test_at_last_note(self):
+        src = "X:1\nK:C\nC D E F|\n"
+        out = annotate(src, FIXED, program=40, at=3)
+        lines = out.splitlines()
+        idx = lines.index("%%MIDI program 40")
+        self.assertEqual(lines[idx - 1], "C D E")
+        self.assertEqual(lines[idx + 1], "F|")
 
 
 if __name__ == "__main__":

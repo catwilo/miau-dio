@@ -647,9 +647,12 @@ def cmd_live(a):
         print(f"Opened: {a.url}")
         return
 
-    from miau_dio.strudel import StrudelError, samples_dir, serve_background
+    from miau_dio.strudel import (StrudelError, samples_dir,
+                                   serve_background)
+    from miau_dio.strudel.server import _local_ipv4_addresses
     try:
-        srv, url, _ = serve_background(port=a.port, project_dir=a.at)
+        srv, url, _ = serve_background(port=a.port, host=a.host,
+                                        project_dir=a.at)
     except StrudelError as e:
         raise SystemExit(f"live: {e}")
     try:
@@ -658,6 +661,12 @@ def cmd_live(a):
         srv.shutdown()
         raise SystemExit(f"live: {e}")
     print(f"Serving: {url}")
+    # When listening on 0.0.0.0, advertise every reachable address so the
+    # user can open it from another device (Tailscale, LAN, ...).
+    if a.host == "0.0.0.0":
+        port = srv.server_address[1]
+        for ip in _local_ipv4_addresses():
+            print(f"Network: http://{ip}:{port}/")
     print(f"Samples: {samples_dir()}")
     print("Press Ctrl+C to stop.")
     try:
@@ -905,8 +914,11 @@ def build_parser() -> argparse.ArgumentParser:
     live = top.add_parser("live", help="open a local live-coding environment")
     live.add_argument("--url", default=None,
                       help="skip the local server and open this URL instead")
-    live.add_argument("--port", type=int, default=0,
-                      help="local port (0 = OS picks a free one)")
+    live.add_argument("--port", type=int, default=8765,
+                      help="local port (default: 8765; 0 = OS picks a free one)")
+    live.add_argument("--host", default="0.0.0.0",
+                      help="bind address (default: 0.0.0.0, accepts Tailscale "
+                           "and LAN; 127.0.0.1 for local only)")
     live.add_argument("--at", default=None,
                       help="bind a miau-dio project directory so the REPL "
                            "can save/load files in its patterns/ folder")

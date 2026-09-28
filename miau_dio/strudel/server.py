@@ -359,6 +359,63 @@ class _Server(socketserver.ThreadingMixIn, http.server.HTTPServer):
     allow_reuse_address = True
 
 
+def _local_ipv4_addresses():
+    """Return every non-loopback IPv4 address on this host.
+
+    Three probes, tried in order; the first one that yields addresses
+    wins. Order matters: `tailscale ip -4` is the most precise (only the
+    tailnet address), then `ifconfig` (works on Termux without root, with
+    a benign netlink warning), then `hostname -I`. Loopback and duplicate
+    addresses are dropped.
+    """
+    import re as _re
+    import shutil as _shutil
+    import subprocess as _sub
+
+    def _run(cmd):
+        try:
+            r = _sub.run(cmd, capture_output=True, text=True, timeout=3)
+            return r.stdout
+        except Exception:
+            return ""
+
+    def _dedup(seq):
+        seen = set()
+        out = []
+        for ip in seq:
+            if ip and ip != "127.0.0.1" and ip not in seen:
+                seen.add(ip)
+                out.append(ip)
+        return out
+
+    # 1) tailscale CLI (most precise).
+    ts = _shutil.which("tailscale")
+    if ts:
+        out = _dedup(_run([ts, "ip", "-4"]).split())
+        if out:
+            return out
+
+    # 2) ifconfig (works on Termux without root).
+    ifconfig = _shutil.which("ifconfig")
+    if ifconfig:
+        text = _run([ifconfig])
+        found = []
+        for line in text.splitlines():
+            m = _re.search(r"\binet (\d+\.\d+\.\d+\.\d+)", line)
+            if m:
+                found.append(m.group(1))
+        out = _dedup(found)
+        if out:
+            return out
+
+    # 3) hostname -I (last resort).
+    hostname = _shutil.which("hostname")
+    if hostname:
+        return _dedup(_run([hostname, "-I"]).split())
+
+    return []
+
+
 def serve(port: int = 0, host: str = "127.0.0.1", project_dir=None):
     if not (_SITE / "index.html").is_file():
         raise StrudelError(f"site missing: {_SITE / 'index.html'}")
@@ -367,7 +424,8 @@ def serve(port: int = 0, host: str = "127.0.0.1", project_dir=None):
         srv = _Server((host, port), _Handler)
     except OSError as e:
         raise StrudelError(f"cannot bind {host}:{port}: {e}") from e
-    url = f"http://{host}:{srv.server_address[1]}/"
+    bound_host = "127.0.0.1" if host in ("0.0.0.0", "") else host
+    url = f"http://{bound_host}:{srv.server_address[1]}/"
     return srv, url
 
 

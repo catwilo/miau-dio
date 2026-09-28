@@ -4,7 +4,7 @@
 # PHILOSOPHY (toolkit standard): SYMLINK, never copy. The installed
 # `miau-dio` is a symlink to bin/miau-dio in this repo; a `git pull`
 # updates it with no reinstall. Backends (abc2midi, timidity, sox) are
-# external binaries handled by `miau-dio setup`, unaffected by this.
+# external binaries handled by `miau-dio backend setup`, unaffected by this.
 #
 # Usage:
 #   bash install.sh          install/update
@@ -61,6 +61,6 @@ case ":$PATH:" in
 esac
 
 echo "installing backends (may ask for sudo on Debian)..."
-"$BINDIR/miau-dio" setup --profile playback
+"$BINDIR/miau-dio" backend setup --profile playback
 
-echo "done. try: miau-dio new \"my first idea\""
+echo "done. try: miau-dio idea new \"my first idea\""

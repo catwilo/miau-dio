@@ -7,18 +7,11 @@ vendored into `site/` (HTML + Astro chunks + fonts + CSS), plus:
   GET /shim/<host>/<path>      -> XDG cache (samples, hydra, jzz, ...)
   GET /samples/<file>          -> user wavs under XDG
   GET /samples/index.json      -> {name: /samples/<file>}
+  GET /miau/<file>             -> our injected JS/CSS assets
+  GET /project/info            -> {name, patterns} of the bound project
+  GET /project/pattern/<name>  -> raw pattern content
+  POST /project/pattern/<name> -> write pattern under <dir>/patterns/
   anything else                -> site/<path> (static)
-
-When a project directory is bound (via `miau-dio live --at <dir>`),
-three extra endpoints let the browser read/write files inside the
-project's `patterns/` folder:
-
-  GET  /project/info              -> {"name", "patterns": [...], "current"}
-  GET  /project/pattern/<name>    -> raw file content
-  POST /project/pattern/<name>    -> write body to <dir>/patterns/<name>
-
-Without --at these endpoints return 404 and the injected UI shows no
-project buttons; the plain offline REPL works exactly as before.
 
 The served index.html is the official one with a small fetch/XHR shim
 injected before any <script>. Requests to known remote hosts
@@ -27,9 +20,15 @@ felixroos.github.io, shabda.ndre.gr) are rewritten to /shim/<host>/<path>
 which the server resolves from XDG_DATA_HOME/miau-dio/strudel/cache/.
 Uncached files 404, so the browser never reaches the network.
 
-Packs are materialized into the cache by `miau-dio sample install <pack>`,
-never by the browser. Nothing but the vendored site + catalog metadata
-lives in git; samples are always local content.
+When a project directory is bound (via `--at <dir>`), the injected
+project bridge lets the browser read/write files in its `patterns/`
+folder. Without --at, /project/info returns 404 and the bridge stays
+inert; the offline REPL works exactly as before.
+
+The injected assets live as plain files in `inject/` (fetch_shim.js,
+miau_bar.js) so no JavaScript is embedded in Python strings -- keeping
+syntax errors out of the source. `miau_bar.js` is the single unified
+toolbar: animations toggle plus project save/load when `--at` is bound.
 """
 from __future__ import annotations
 
@@ -43,10 +42,11 @@ import urllib.parse
 
 _HERE = pathlib.Path(__file__).resolve().parent
 _SITE = _HERE / "site"
+_INJECT = _HERE / "inject"
 _PROJECT_DIR = None
 
 # Hosts the browser must never reach. Any URL pointing at one of these is
-# rewritten to /shim/<host>/<path> by the injected fetch shim and resolved
+# rewritten to /shim/<host>/<path> by inject/fetch_shim.js and resolved
 # from XDG_DATA_HOME. Kept as a Python constant so tests can assert against
 # it (see test_strudel_server.TestOfflineInvariant).
 SHIM_HOSTS = (
@@ -62,17 +62,19 @@ SHIM_HOSTS = (
 MAX_PATTERN_BYTES = 1024 * 1024
 
 # When a request exceeds MAX_PATTERN_BYTES, the server drains the pending
-# body before replying 413. Draining keeps the client from seeing a
-# broken pipe (http.server does not consume an unread body on its own).
-# Beyond this limit the server stops reading and closes the connection,
-# accepting that the client will see a reset -- no local caller should
-# ever approach this ceiling.
+# body before replying 413. Draining keeps the client from seeing a broken
+# pipe (http.server does not consume an unread body on its own). Beyond
+# this limit the server stops reading and closes the connection, accepting
+# that the client will see a reset -- no local caller should ever approach
+# this ceiling.
 HARD_DRAIN_LIMIT = 100 * 1024 * 1024
 
 
-def _shim_hosts_js():
-    return "[" + ", ".join(repr(h) for h in SHIM_HOSTS) + "]"
+class StrudelError(RuntimeError):
+    """Raised when the local Strudel server cannot start or serve."""
 
+
+# ---- project binding -------------------------------------------------------
 
 def _set_project_dir(path):
     """Bind (or clear) the current project for /project/* endpoints."""
@@ -90,7 +92,7 @@ def _set_project_dir(path):
 
 
 def _project_info():
-    """Snapshot of the bound project: name, pattern files, current."""
+    """Snapshot of the bound project: name and pattern files."""
     if _PROJECT_DIR is None:
         return None
     try:
@@ -101,131 +103,27 @@ def _project_info():
     patterns_dir = _PROJECT_DIR / "patterns"
     files = sorted(p.name for p in patterns_dir.iterdir()
                    if p.is_file() and not p.name.startswith("."))
-    return {"name": name, "patterns": files, "current": ""}
-
-_FETCH_SHIM = """<script>
-(function () {
-  const NATIVE_FETCH = window.fetch.bind(window);
-  const SHIM_HOSTS = __SHIM_HOSTS__;
-  function rewrite(url) {
-    for (const host of SHIM_HOSTS) {
-      for (const prefix of ['https://' + host + '/', 'http://' + host + '/']) {
-        if (url.startsWith(prefix)) {
-          return '/shim/' + host + '/' + url.slice(prefix.length);
-        }
-      }
-    }
-    return null;
-  }
-  window.fetch = function (input, init) {
-    let url = null;
-    try { url = typeof input === 'string' ? input : (input && input.url); } catch (e) {}
-    if (url) {
-      const r = rewrite(url);
-      if (r) {
-        if (typeof input === 'string') return NATIVE_FETCH(r, init);
-        return NATIVE_FETCH(new Request(r, input), init);
-      }
-    }
-    return NATIVE_FETCH(input, init);
-  };
-  const NativeXHR = window.XMLHttpRequest;
-  window.XMLHttpRequest = function () {
-    const xhr = new NativeXHR();
-    const nativeOpen = xhr.open.bind(xhr);
-    xhr.open = function (method, url, ...rest) {
-      if (typeof url === 'string') { const r = rewrite(url); if (r) url = r; }
-      return nativeOpen(method, url, ...rest);
-    };
-    return xhr;
-  };
-})();
-</script>
-<script>
-// Project bridge -- only active when the server was started with --at.
-// Uses window.strudelMirror to read/write the editor content.
-(function () {
-  async function info() {
-    try {
-      const r = await fetch('/project/info');
-      if (!r.ok) return null;
-      return await r.json();
-    } catch (e) { return null; }
-  }
-  function setStatus(text) {
-    const el = document.getElementById('miau-project-status');
-    if (el) el.textContent = text;
-  }
-  async function refresh() {
-    const i = await info();
-    if (!i) return;
-    setStatus(i.name + ' \u00b7 ' + i.patterns.length + ' pattern(s)');
-  }
-  async function savePattern() {
-    if (!window.strudelMirror) { alert('editor not ready'); return; }
-    const suggested = 'pattern-' + new Date().toISOString().slice(0, 10);
-    const name = prompt('save pattern as:', suggested);
-    if (!name) return;
-    const body = window.strudelMirror.code || '';
-    const r = await fetch('/project/pattern/' + encodeURIComponent(name),
-                          { method: 'POST', body: body });
-    if (!r.ok) { alert('save failed: ' + r.status); return; }
-    setStatus('saved ' + name);
-    refresh();
-  }
-  async function loadPattern() {
-    const i = await info();
-    if (!i || i.patterns.length === 0) { alert('no patterns saved yet'); return; }
-    const name = prompt('load pattern:\n' + i.patterns.join('\n'));
-    if (!name) return;
-    const r = await fetch('/project/pattern/' + encodeURIComponent(name));
-    if (!r.ok) { alert('load failed: ' + r.status); return; }
-    const body = await r.text();
-    if (!window.strudelMirror) { alert('editor not ready'); return; }
-    window.strudelMirror.setCode(body);
-    setStatus('loaded ' + name);
-  }
-  function install() {
-    if (document.getElementById('miau-project-bar')) return;
-    const bar = document.createElement('div');
-    bar.id = 'miau-project-bar';
-    bar.style.cssText = 'position:fixed;top:0;right:0;z-index:99999;' +
-      'background:#18181b;color:#e6e6ea;padding:6px 10px;' +
-      'font:12px/1.4 ui-monospace,Menlo,monospace;border:1px solid #2a2a2f;' +
-      'border-top:0;border-right:0;border-radius:0 0 0 4px;' +
-      'display:flex;gap:8px;align-items:center';
-    const status = document.createElement('span');
-    status.id = 'miau-project-status';
-    status.style.cssText = 'color:#8a8a93';
-    status.textContent = 'project';
-    const btnSave = document.createElement('button');
-    btnSave.textContent = 'save pattern';
-    btnSave.style.cssText = 'background:#1f6f3f;color:#fff;border:0;' +
-      'padding:3px 8px;border-radius:3px;font:inherit;cursor:pointer';
-    btnSave.onclick = savePattern;
-    const btnLoad = document.createElement('button');
-    btnLoad.textContent = 'load pattern';
-    btnLoad.style.cssText = 'background:#2a2a2f;color:#e6e6ea;border:0;' +
-      'padding:3px 8px;border-radius:3px;font:inherit;cursor:pointer';
-    btnLoad.onclick = loadPattern;
-    bar.appendChild(btnSave);
-    bar.appendChild(btnLoad);
-    bar.appendChild(status);
-    document.body.appendChild(bar);
-    refresh();
-  }
-  window.addEventListener('DOMContentLoaded', async () => {
-    const i = await info();
-    if (i) install();
-  });
-})();
-</script>
-"""
+    return {"name": name, "patterns": files}
 
 
-class StrudelError(RuntimeError):
-    """Raised when the local Strudel server cannot start or serve."""
+def _safe_pattern_name(raw):
+    """Return a safe pattern filename or None.
 
+    Rejects path separators, `..`, leading dots and empty names. Appends
+    `.js` when missing so callers can send either form.
+    """
+    if not isinstance(raw, str):
+        return None
+    name = raw.strip()
+    if (not name or "/" in name or "\\" in name
+            or name in (".", "..") or name.startswith(".")):
+        return None
+    if not name.endswith(".js"):
+        name = name + ".js"
+    return name
+
+
+# ---- XDG paths -------------------------------------------------------------
 
 def _xdg_root() -> pathlib.Path:
     base = os.environ.get("XDG_DATA_HOME") or os.path.expanduser(
@@ -246,24 +144,6 @@ def cache_dir() -> pathlib.Path:
     return d
 
 
-def _log_path() -> pathlib.Path | None:
-    """Optional request log destination, from MIAU_STRUDEL_LOG."""
-    raw = os.environ.get("MIAU_STRUDEL_LOG")
-    if not raw:
-        return None
-    p = pathlib.Path(raw).expanduser()
-    p.parent.mkdir(parents=True, exist_ok=True)
-    return p
-
-
-def _log_request(status: int, method: str, path: str, target: str) -> None:
-    lp = _log_path()
-    if lp is None:
-        return
-    with lp.open("a", encoding="utf-8") as f:
-        f.write(f"{status} {method} {path} -> {target}\n")
-
-
 def _list_flat_samples() -> dict[str, str]:
     out: dict[str, str] = {}
     for p in sorted(samples_dir().iterdir()):
@@ -272,75 +152,18 @@ def _list_flat_samples() -> dict[str, str]:
     return out
 
 
-_ANIM_TOGGLE_SCRIPT = """<script>
-// Animations toggle -- always present. Toggles the two visual pulses the
-// editor adds while a pattern plays (line highlight and flash). Audio is
-// unaffected. Preference is persisted per browser in localStorage; the
-// button is idempotent (second install is a no-op).
-(function () {
-  const KEY = 'miau-dio.animations';
-  function readPref() {
-    try { return localStorage.getItem(KEY) !== 'off'; }
-    catch (e) { return true; }
-  }
-  function writePref(on) {
-    try { localStorage.setItem(KEY, on ? 'on' : 'off'); } catch (e) {}
-  }
-  function apply(ed, on) {
-    try {
-      ed.updateSettings({
-        isPatternHighlightingEnabled: on,
-        isFlashEnabled: on,
-      });
-    } catch (e) { /* editor may not yet expose updateSettings */ }
-  }
-  function whenEditor(cb, tries) {
-    tries = tries || 0;
-    const ed = window.strudelMirror;
-    if (ed && typeof ed.updateSettings === 'function') { cb(ed); return; }
-    if (tries > 60) return;
-    setTimeout(() => whenEditor(cb, tries + 1), 100);
-  }
-  function install() {
-    if (document.getElementById('miau-anim-toggle')) return;
-    const bar = document.createElement('div');
-    bar.id = 'miau-anim-toggle';
-    bar.style.cssText = 'position:fixed;bottom:0;right:0;z-index:99999;' +
-      'background:#18181b;color:#e6e6ea;padding:5px 9px;' +
-      'font:12px/1.4 ui-monospace,Menlo,monospace;' +
-      'border:1px solid #2a2a2f;border-bottom:0;border-right:0;' +
-      'border-radius:4px 0 0 0;display:flex;gap:6px;align-items:center';
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    let on = readPref();
-    function render() {
-      btn.textContent = 'animations: ' + (on ? 'on' : 'off');
-      btn.style.cssText = 'background:' + (on ? '#1f6f3f' : '#2a2a2f') +
-        ';color:#e6e6ea;border:0;padding:3px 8px;border-radius:3px;' +
-        'font:inherit;cursor:pointer';
-    }
-    render();
-    btn.addEventListener('click', () => {
-      on = !on;
-      writePref(on);
-      render();
-      whenEditor((ed) => apply(ed, on));
-    });
-    bar.appendChild(btn);
-    document.body.appendChild(bar);
-    whenEditor((ed) => apply(ed, on));
-  }
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', install);
-  } else {
-    install();
-  }
-})();
-</script>
-"""
+# ---- index rendering -------------------------------------------------------
+
+def _shim_hosts_js():
+    return "[" + ", ".join(json.dumps(h) for h in SHIM_HOSTS) + "]"
 
 
 def _render_index() -> bytes:
+    """Serve site/index.html with our injected assets appended to <head>.
+
+    The assets live as files under inject/ and are referenced by URL; no
+    JavaScript is embedded in this Python module.
+    """
     src = _SITE / "index.html"
     if not src.is_file():
         raise StrudelError(f"index.html missing in vendored site: {src}")
@@ -350,43 +173,32 @@ def _render_index() -> bytes:
     if idx < 0:
         raise StrudelError("vendored index.html has no <head> tag")
     inject_at = idx + len(marker)
-    shim = _FETCH_SHIM.replace("__SHIM_HOSTS__", _shim_hosts_js())
-    patched = html[:inject_at] + shim + _ANIM_TOGGLE_SCRIPT + html[inject_at:]
+
+    # The fetch shim must run before any other script; serve it as an
+    # external asset so the browser loads it synchronously.
+    # /miau/fetch_shim.js returns the file with __SHIM_HOSTS__ replaced
+    # with the actual list from SHIM_HOSTS (single source of truth).
+    head = (
+        '<script src="/miau/fetch_shim.js"></script>'
+        '<script defer src="/miau/miau_bar.js"></script>'
+    )
+    patched = html[:inject_at] + head + html[inject_at:]
     return patched.encode("utf-8")
 
+
+# ---- handler ---------------------------------------------------------------
 
 class _Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass
 
-    def _send(self, status: int, ctype: str, body: bytes, target: str = "") -> None:
-        _log_request(status, self.command or "?", self.path or "?", target)
+    def _send(self, status: int, ctype: str, body: bytes) -> None:
         self.send_response(status)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)
-
-    def _serve_file(self, path: pathlib.Path) -> None:
-        if not path.is_file():
-            self._send(404, "text/plain", b"not found", str(path))
-            return
-        self._send(200, self._ctype_for(path), path.read_bytes(), str(path))
-
-    def _drain_body(self, length: int) -> None:
-        """Consume `length` bytes from the request body without storing them.
-
-        http.server does not drain an unread body, so a client that sent a
-        large payload would see a broken pipe before reading our reply.
-        Draining lets the 413 response land cleanly.
-        """
-        remaining = length
-        while remaining > 0:
-            chunk = self.rfile.read(min(remaining, 65536))
-            if not chunk:
-                break
-            remaining -= len(chunk)
 
     @staticmethod
     def _ctype_for(path: pathlib.Path) -> str:
@@ -414,10 +226,37 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             ".txt": "text/plain; charset=utf-8",
         }.get(ext, "application/octet-stream")
 
-    def _safe_join(self, root: pathlib.Path, rel: str) -> pathlib.Path | None:
+    @staticmethod
+    def _safe_join(root: pathlib.Path, rel: str):
         if ".." in rel or rel.startswith("/") or "\\" in rel:
             return None
         return root / rel
+
+    def _serve_file(self, path: pathlib.Path) -> None:
+        if not path.is_file():
+            self._send(404, "text/plain", b"not found")
+            return
+        self._send(200, self._ctype_for(path), path.read_bytes())
+
+    def _serve_inject(self, name: str) -> None:
+        """Serve an inject/ asset, substituting __SHIM_HOSTS__ in JS files."""
+        path = self._safe_join(_INJECT, name)
+        if path is None or not path.is_file():
+            self._send(404, "text/plain", b"not found")
+            return
+        body = path.read_bytes()
+        if name == "fetch_shim.js":
+            body = body.replace(b"__SHIM_HOSTS__",
+                                _shim_hosts_js().encode())
+        self._send(200, self._ctype_for(path), body)
+
+    def _drain_body(self, length: int) -> None:
+        remaining = length
+        while remaining > 0:
+            chunk = self.rfile.read(min(remaining, 65536))
+            if not chunk:
+                break
+            remaining -= len(chunk)
 
     def do_GET(self):  # noqa: N802
         if self.path in ("/", "/index.html"):
@@ -427,18 +266,8 @@ class _Handler(http.server.BaseHTTPRequestHandler):
                 self._send(500, "text/plain", str(e).encode())
             return
 
-        if self.path == "/samples/index.json":
-            self._send(200, "application/json",
-                       json.dumps(_list_flat_samples()).encode())
-            return
-
-        if self.path.startswith("/samples/"):
-            rel = self.path[len("/samples/"):]
-            target = self._safe_join(samples_dir(), rel)
-            if target is None:
-                self._send(400, "text/plain", b"bad path")
-                return
-            self._serve_file(target)
+        if self.path.startswith("/miau/"):
+            self._serve_inject(self.path[len("/miau/"):].split("?", 1)[0])
             return
 
         if self.path == "/project/info":
@@ -453,14 +282,26 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             if _PROJECT_DIR is None:
                 self._send(404, "text/plain", b"no project bound")
                 return
-            name = urllib.parse.unquote(self.path[len("/project/pattern/"):])
-            if (not name or "/" in name or "\\" in name
-                    or name in (".", "..") or name.startswith(".")):
+            raw = urllib.parse.unquote(self.path[len("/project/pattern/"):])
+            name = _safe_pattern_name(raw)
+            if name is None:
                 self._send(400, "text/plain", b"bad pattern name")
                 return
-            if not name.endswith(".js"):
-                name = name + ".js"
             self._serve_file(_PROJECT_DIR / "patterns" / name)
+            return
+
+        if self.path == "/samples/index.json":
+            self._send(200, "application/json",
+                       json.dumps(_list_flat_samples()).encode())
+            return
+
+        if self.path.startswith("/samples/"):
+            rel = self.path[len("/samples/"):]
+            target = self._safe_join(samples_dir(), rel)
+            if target is None:
+                self._send(400, "text/plain", b"bad path")
+                return
+            self._serve_file(target)
             return
 
         if self.path.startswith("/shim/"):
@@ -490,13 +331,6 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         if _PROJECT_DIR is None:
             self._send(404, "text/plain", b"no project bound")
             return
-        name = urllib.parse.unquote(self.path[len("/project/pattern/"):])
-        if (not name or "/" in name or "\\" in name
-                or name in (".", "..") or name.startswith(".")):
-            self._send(400, "text/plain", b"bad pattern name")
-            return
-        if not name.endswith(".js"):
-            name = name + ".js"
         length = int(self.headers.get("Content-Length") or 0)
         if length < 0:
             self._send(400, "text/plain", b"bad content-length")
@@ -505,6 +339,11 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             if length <= HARD_DRAIN_LIMIT:
                 self._drain_body(length)
             self._send(413, "text/plain", b"payload too large")
+            return
+        raw = urllib.parse.unquote(self.path[len("/project/pattern/"):])
+        name = _safe_pattern_name(raw)
+        if name is None:
+            self._send(400, "text/plain", b"bad pattern name")
             return
         body = self.rfile.read(length) if length else b""
         target = _PROJECT_DIR / "patterns" / name
@@ -541,6 +380,8 @@ def serve_background(port: int = 0, host: str = "127.0.0.1",
 
 
 __all__ = [
+    "MAX_PATTERN_BYTES",
+    "SHIM_HOSTS",
     "StrudelError",
     "cache_dir",
     "samples_dir",

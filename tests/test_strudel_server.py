@@ -40,9 +40,19 @@ class TestServe(_IsolatedCase):
     def test_index_injects_fetch_shim(self):
         status, body = self._get("/")
         self.assertEqual(status, 200)
+        # The page references the external shim; the shim itself is
+        # served from /miau/fetch_shim.js (checked below).
+        self.assertIn(b"/miau/fetch_shim.js", body)
+        self.assertIn(b"/miau/miau_bar.js", body)
+
+    def test_fetch_shim_asset_served_with_hosts(self):
+        status, body = self._get("/miau/fetch_shim.js")
+        self.assertEqual(status, 200)
         self.assertIn(b"NATIVE_FETCH", body)
         self.assertIn(b"SHIM_HOSTS", body)
         self.assertIn(b"raw.githubusercontent.com", body)
+        # The template placeholder must not leak through.
+        self.assertNotIn(b"__SHIM_HOSTS__", body)
 
     def test_site_asset_served(self):
         status, body = self._get("/_astro/Repl.tMWe_n7b.js")
@@ -130,12 +140,14 @@ class TestOfflineInvariant(unittest.TestCase):
             os.environ["XDG_DATA_HOME"] = self._prev
         self._tmp.cleanup()
 
-    def test_served_html_lists_every_shim_host(self):
-        with urllib.request.urlopen(self.url) as r:
+    def test_served_shim_lists_every_host(self):
+        # The shim JS served at /miau/fetch_shim.js must contain every
+        # host declared in server.SHIM_HOSTS (single source of truth).
+        with urllib.request.urlopen(self.url + "miau/fetch_shim.js") as r:
             body = r.read().decode("utf-8")
         for host in self.srvmod.SHIM_HOSTS:
             self.assertIn(host, body,
-                          f"shim host not advertised in page: {host}")
+                          f"shim host not advertised in shim.js: {host}")
 
     def test_uncached_shim_url_is_404(self):
         # An uncached remote URL must 404 rather than proxy out.
@@ -146,12 +158,14 @@ class TestOfflineInvariant(unittest.TestCase):
         self.assertEqual(cm.exception.code, 404)
         cm.exception.close()
 
-    def test_animations_toggle_present(self):
-        with urllib.request.urlopen(self.url) as r:
+    def test_miau_bar_asset_present(self):
+        with urllib.request.urlopen(self.url + "miau/miau_bar.js") as r:
             body = r.read().decode("utf-8")
-        self.assertIn("miau-anim-toggle", body)
+        self.assertIn("miau-bar", body)
         self.assertIn("isPatternHighlightingEnabled", body)
         self.assertIn("isFlashEnabled", body)
+        self.assertIn("save pattern", body)
+        self.assertIn("load pattern", body)
 
 
 class TestErrors(unittest.TestCase):

@@ -35,6 +35,8 @@ from miau_dio.instruments.model import Instrument, InstrumentError
 from miau_dio.installer.installer import ensure
 from miau_dio.pipeline import pipeline
 from miau_dio.store import store
+from miau_dio.project import store as _pstore
+from miau_dio.project.model import Project, ProjectError as _ProjectError, Track
 
 
 # ---- helpers ---------------------------------------------------------------
@@ -250,6 +252,74 @@ def cmd_family_list(a):
     for f in fams:
         print(f)
 
+
+# ---- project ---------------------------------------------------------------
+
+def cmd_project_new(a):
+    tracks = []
+    for spec in (a.track or []):
+        parts = spec.split(":", 2)
+        if len(parts) < 2:
+            raise SystemExit(
+                f"--track must be name:type[:content], got {spec!r}"
+            )
+        name = parts[0]
+        ttype = parts[1]
+        content = parts[2] if len(parts) > 2 else ""
+        try:
+            tracks.append(Track(name=name, type=ttype, content=content))
+        except _ProjectError as e:
+            raise SystemExit(f"track {name!r} invalid: {e}")
+    try:
+        project = Project(
+            name=a.name,
+            tracks=tracks,
+            tempo=a.tempo if a.tempo is not None else 120.0,
+            time_signature=a.meter or "4/4",
+            key=a.key or "C",
+        )
+    except _ProjectError as e:
+        raise SystemExit(f"project new failed: {e}")
+    iid, stored = _pstore.add(project)
+    print(f"Created [{iid}] {stored.name} ({len(stored.tracks)} tracks)")
+
+
+def cmd_project_list(a):
+    items = _pstore.list_projects()
+    if a.json:
+        print(_json.dumps(
+            [{"id": i, **e} for i, e in items], ensure_ascii=False
+        ))
+        return
+    for iid, entry in items:
+        tc = entry.get("track_count", 0)
+        print(f"[{iid}] {entry['name']}  ({tc} tracks)")
+
+
+def cmd_project_show(a):
+    try:
+        p = _pstore.get(a.id)
+    except (KeyError, _pstore.ProjectStoreError) as e:
+        raise SystemExit(str(e))
+    print(f"[{a.id}] {p.name}")
+    print(f"  tempo:          {p.tempo}")
+    print(f"  time_signature: {p.time_signature}")
+    print(f"  key:            {p.key}")
+    print(f"  created:        {p.created}")
+    print(f"  modified:       {p.modified}")
+    print(f"  tracks:         {len(p.tracks)}")
+    for i, t in enumerate(p.tracks):
+        print(f"    [{i}] {t.name}  type={t.type}  "
+              f"instrument={t.instrument or '-'}  "
+              f"vol={t.volume}  pan={t.pan}")
+
+
+def cmd_project_rm(a):
+    if not a.yes:
+        if input(f"Delete project {a.id}? [y/N] ").lower() != "y":
+            return
+    _pstore.remove(a.id)
+    print("Deleted.")
 
 # ---- play ------------------------------------------------------------------
 
@@ -543,6 +613,32 @@ def build_parser() -> argparse.ArgumentParser:
     fsub = fam.add_subparsers(dest="family_cmd", required=True)
     s = fsub.add_parser("list", help="list distinct family labels")
     s.set_defaults(func=cmd_family_list)
+
+    # ---- project -----------------------------------------------------------
+    proj = top.add_parser("project", help="manage musical projects")
+    pjsub = proj.add_subparsers(dest="project_cmd", required=True)
+
+    s = pjsub.add_parser("new", help="create a project")
+    s.add_argument("name")
+    s.add_argument("--tempo", type=float, default=None)
+    s.add_argument("--meter", default=None, help="time signature, e.g. 4/4")
+    s.add_argument("--key", default=None)
+    s.add_argument("--track", action="append", default=[],
+                   help="name:type[:content]; repeatable")
+    s.set_defaults(func=cmd_project_new)
+
+    s = pjsub.add_parser("list", help="list projects")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(func=cmd_project_list)
+
+    s = pjsub.add_parser("show", help="show one project")
+    s.add_argument("id")
+    s.set_defaults(func=cmd_project_show)
+
+    s = pjsub.add_parser("rm", help="delete a project")
+    s.add_argument("id")
+    s.add_argument("-y", "--yes", action="store_true")
+    s.set_defaults(func=cmd_project_rm)
 
     # ---- play --------------------------------------------------------------
     play = top.add_parser("play", help="render and play")

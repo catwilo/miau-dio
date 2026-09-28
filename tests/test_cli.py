@@ -68,7 +68,8 @@ class TestParserShape(unittest.TestCase):
         subs = _subparsers(cli.build_parser())
         self.assertEqual(
             set(subs.keys()),
-            {"idea", "instr", "family", "play", "config", "backend"},
+            {"idea", "instr", "family", "play", "config", "backend",
+             "project"},
         )
 
     def test_idea_subcommands(self):

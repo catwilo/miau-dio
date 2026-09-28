@@ -2,6 +2,8 @@
 import os
 import pathlib
 import shutil
+import subprocess
+import webbrowser
 
 
 def is_termux() -> bool:
@@ -60,3 +62,24 @@ def audio_player() -> list[str]:
         if shutil.which(c[0]):
             return c
     raise RuntimeError("no audio player found (install sox, alsa-utils or mpv)")
+
+
+def open_url(url: str) -> None:
+    """Open a URL in the system browser.
+
+    Prefers `termux-open-url` when available (routes through Android
+    intents on Termux), otherwise falls back to the stdlib `webbrowser`
+    module. Raises RuntimeError when neither path is usable.
+    """
+    if not isinstance(url, str) or not url:
+        raise RuntimeError("open_url: url must be a non-empty string")
+    opener = shutil.which("termux-open-url")
+    if opener:
+        subprocess.run([opener, url], check=True)
+        return
+    try:
+        opened = webbrowser.open(url)
+    except webbrowser.Error as e:
+        raise RuntimeError(f"could not open browser: {e}") from e
+    if not opened:
+        raise RuntimeError("no browser available to open the URL")

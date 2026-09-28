@@ -69,7 +69,7 @@ class TestParserShape(unittest.TestCase):
         self.assertEqual(
             set(subs.keys()),
             {"idea", "instr", "family", "play", "config", "backend",
-             "project"},
+             "project", "live", "sample"},
         )
 
     def test_idea_subcommands(self):

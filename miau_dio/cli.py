@@ -36,6 +36,8 @@ from miau_dio.installer.installer import ensure
 from miau_dio.pipeline import pipeline
 from miau_dio.store import store
 from miau_dio.project import layout as _playout
+from miau_dio.strudel import catalog as _scatalog
+from miau_dio.strudel import samples as _samples
 from miau_dio.project import store as _pstore
 from miau_dio.project.model import Project, ProjectError as _ProjectError, Track
 
@@ -513,6 +515,160 @@ def cmd_backend_selftest(a):
         raise SystemExit(1)
 
 
+# ---- sample ----------------------------------------------------------------
+
+def _fmt_mb(value, is_bytes=False) -> str:
+    if is_bytes:
+        return f"{value / 1024 / 1024:.1f} MB"
+    return f"{value:.1f} MB"
+
+
+def cmd_sample_list(a):
+    """List every pack in the catalog (available to install)."""
+    packs = _scatalog.all_packs()
+    if a.json:
+        print(_json.dumps(
+            [{"name": p.name, "description": p.description,
+              "license": p.license, "approx_mb": p.approx_mb,
+              "tags": list(p.tags),
+              "installed": _samples.is_installed(p.name)}
+             for p in packs], ensure_ascii=False))
+        return
+    for p in packs:
+        mark = "*" if _samples.is_installed(p.name) else " "
+        print(f"{mark} {p.name:<10} ~{p.approx_mb:>4.1f} MB  "
+              f"{', '.join(p.tags) or '-'}")
+        print(f"    {p.description}")
+    print()
+    print("(*) already installed. Install with: miau-dio sample install <name>")
+
+
+def cmd_sample_info(a):
+    try:
+        pack = _scatalog.get(a.name)
+    except KeyError as e:
+        raise SystemExit(str(e))
+    installed = _samples.is_installed(pack.name)
+    print(f"name:        {pack.name}")
+    print(f"description: {pack.description}")
+    print(f"license:     {pack.license}")
+    print(f"approx size: ~{pack.approx_mb:.1f} MB")
+    print(f"tags:        {', '.join(pack.tags) or '-'}")
+    print(f"manifest:    {pack.manifest_url}")
+    print(f"installed:   {'yes' if installed else 'no'}")
+    if installed:
+        print(f"on disk:     "
+              f"{_fmt_mb(_samples.size_on_disk(pack.name), is_bytes=True)}")
+
+
+def cmd_sample_installed(a):
+    names = _samples.installed()
+    if a.json:
+        print(_json.dumps(
+            [{"name": n, "size_bytes": _samples.size_on_disk(n),
+              "size_mb": round(_samples.size_on_disk(n) / 1024 / 1024, 2)}
+             for n in names], ensure_ascii=False))
+        return
+    if not names:
+        print("no packs installed")
+        return
+    total = 0
+    for n in names:
+        b = _samples.size_on_disk(n)
+        total += b
+        print(f"{n:<12} {_fmt_mb(b, is_bytes=True)}")
+    print(f"{'(total)':<12} {_fmt_mb(total, is_bytes=True)}")
+
+
+def cmd_sample_install(a):
+    names = a.names or []
+    if not names:
+        raise SystemExit("sample install: at least one pack name is required")
+    for name in names:
+        try:
+            _scatalog.get(name)
+        except KeyError as e:
+            raise SystemExit(str(e))
+        if _samples.is_installed(name):
+            print(f"[skip] {name}: already installed")
+            continue
+        counter = {"n": 0}
+
+        def _progress(url, _c=counter):
+            _c["n"] += 1
+            print(f"  [{_c['n']}] {url}")
+
+        print(f"installing {name}...")
+        try:
+            _samples.install(name, on_progress=_progress)
+        except _samples.SampleError as e:
+            raise SystemExit(f"install failed: {e}")
+        size = _samples.size_on_disk(name)
+        print(f"[ok]   {name}: {_fmt_mb(size, is_bytes=True)} on disk")
+
+
+def cmd_sample_remove(a):
+    names = a.names or []
+    if not names:
+        raise SystemExit("sample remove: at least one pack name is required")
+    for name in names:
+        if not _samples.is_installed(name):
+            print(f"[skip] {name}: not installed")
+            continue
+        if not a.yes:
+            answer = input(f"Remove pack {name}? [y/N] ").lower()
+            if answer != "y":
+                print(f"[skip] {name}")
+                continue
+        try:
+            n = _samples.remove(name)
+        except _samples.SampleError as e:
+            raise SystemExit(f"remove failed: {e}")
+        print(f"[ok]   {name}: removed {n} files")
+
+
+# ---- live ------------------------------------------------------------------
+
+def cmd_live(a):
+    """Start a local Strudel server and open it in the system browser.
+
+    With `--url`, skip the local server and open that URL directly
+    (escape hatch for the public strudel.cc or a custom instance).
+    Without `--url`, serve the vendored bundle locally (no internet
+    needed at runtime) and block until Ctrl+C.
+    """
+    from miau_dio.platform.platform import open_url
+
+    if a.url:
+        try:
+            open_url(a.url)
+        except RuntimeError as e:
+            raise SystemExit(f"live: {e}")
+        print(f"Opened: {a.url}")
+        return
+
+    from miau_dio.strudel import StrudelError, samples_dir, serve_background
+    try:
+        srv, url, _ = serve_background(port=a.port)
+    except StrudelError as e:
+        raise SystemExit(f"live: {e}")
+    try:
+        open_url(url)
+    except RuntimeError as e:
+        srv.shutdown()
+        raise SystemExit(f"live: {e}")
+    print(f"Serving: {url}")
+    print(f"Samples: {samples_dir()}")
+    print("Press Ctrl+C to stop.")
+    try:
+        srv.serve_forever()
+    except KeyboardInterrupt:
+        print()
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
 # ---- parser ----------------------------------------------------------------
 
 def build_parser() -> argparse.ArgumentParser:
@@ -718,6 +874,40 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--full", action="store_true",
                    help="also test audio render")
     s.set_defaults(func=cmd_backend_selftest)
+
+    # ---- sample ------------------------------------------------------------
+    samp = top.add_parser("sample", help="manage sample packs")
+    ssub = samp.add_subparsers(dest="sample_cmd", required=True)
+
+    s = ssub.add_parser("list", help="list packs available in the catalog")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(func=cmd_sample_list)
+
+    s = ssub.add_parser("info", help="show details of one pack")
+    s.add_argument("name")
+    s.set_defaults(func=cmd_sample_info)
+
+    s = ssub.add_parser("installed", help="list packs already installed")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(func=cmd_sample_installed)
+
+    s = ssub.add_parser("install",
+                        help="download one or more packs into the local cache")
+    s.add_argument("names", nargs="+")
+    s.set_defaults(func=cmd_sample_install)
+
+    s = ssub.add_parser("remove", help="delete installed packs from the cache")
+    s.add_argument("names", nargs="+")
+    s.add_argument("-y", "--yes", action="store_true")
+    s.set_defaults(func=cmd_sample_remove)
+
+    # ---- live --------------------------------------------------------------
+    live = top.add_parser("live", help="open a local live-coding environment")
+    live.add_argument("--url", default=None,
+                      help="skip the local server and open this URL instead")
+    live.add_argument("--port", type=int, default=0,
+                      help="local port (0 = OS picks a free one)")
+    live.set_defaults(func=cmd_live)
 
     return p
 

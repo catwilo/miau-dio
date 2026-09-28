@@ -87,9 +87,11 @@ Documento operativo. Responde una pregunta: dado un sintoma, que archivo abro pr
 
 **miau_dio/strudel/samples.py** - Instala y borra packs. install baja el manifest y cada asset y los guarda en XDG_DATA_HOME/miau-dio/strudel/cache/<host>/<path>. El registro .packs/<nombre>.json guarda que archivos pertenecen a cada pack. remove borra esos archivos y poda directorios vacios. Si falla la red a mitad, borra lo ya bajado.
 
-**miau_dio/strudel/server.py** - Servidor HTTP local que sirve el REPL oficial vendorizado. Inyecta un fetch y XHR shim en el head del HTML: cualquier URL a un host remoto conocido (raw.githubusercontent.com, cdn.jsdelivr.net, unpkg.com, felixroos.github.io, shabda.ndre.gr) se reescribe a /shim/<host>/<path>, resuelto desde el cache XDG. Si no esta en cache, 404. El navegador nunca sale a la red. Tambien sirve /samples/<file> y /samples/index.json. Logging opcional via MIAU_STRUDEL_LOG.
+**miau_dio/strudel/server.py** - Servidor HTTP local que sirve el REPL oficial vendorizado. Sirve el HTML del sitio con dos <script> externos inyectados en el head (nunca JS embebido en Python, para no romper la sintaxis por escapes): /miau/fetch_shim.js y /miau/miau_bar.js. El shim reescribe cualquier URL a un host remoto conocido (la tupla SHIM_HOSTS: raw.githubusercontent.com, cdn.jsdelivr.net, unpkg.com, felixroos.github.io, shabda.ndre.gr) a /shim/<host>/<path>, resuelto desde el cache XDG. Si no esta en cache, 404: el navegador nunca sale a la red. Tambien sirve /samples/<file> y /samples/index.json. Con `live --at <dir>` activa el project bridge: GET /project/info (nombre + patterns del proyecto), GET/POST /project/pattern/<name> (leer/escribir en <dir>/patterns/). Path traversal rechazado, nombre de pattern validado (_safe_pattern_name), body acotado a MAX_PATTERN_BYTES. Logging opcional via MIAU_STRUDEL_LOG.
 
 **miau_dio/strudel/site/** - Copia estatica del REPL oficial de strudel.cc (HTML, chunks Astro, fuentes). No se edita a mano. Se regenera con el crawler de vendorizado. Solo se toca para actualizar la version del REPL.
+
+**miau_dio/strudel/inject/** - Assets propios inyectados en el REPL vendoreado. `fetch_shim.js` (reemplaza __SHIM_HOSTS__ con la tupla de server.py al servirse) corta cualquier peticion a hosts remotos. `miau_bar.js` es la unica barra de controles: un footer full-width abajo con el toggle de animaciones (siempre) y save/load/estado del proyecto (solo si la sesion arranco con --at). El script es idempotente y se re-instala via MutationObserver si una pasada del DOM (hidratacion React) lo quita. Se sirven via /miau/<file>.
 
 ### Otros
 
@@ -130,6 +132,8 @@ Documento operativo. Responde una pregunta: dado un sintoma, que archivo abro pr
 | Algo falla solo en Termux o solo en Debian | platform/platform.py |
 | El binario miau-dio no aparece en PATH | install.sh (symlink), bin/miau-dio (launcher) |
 | miau-dio live no arranca | strudel/server.py, luego platform.open_url |
+| live --at rechaza el path | strudel/server.py:_set_project_dir (requiere project.json) |
+| El footer del REPL no aparece o no responde | strudel/inject/miau_bar.js, luego el DOM del navegador (consola) |
 | El REPL carga pero no suena | consola del navegador y MIAU_STRUDEL_LOG |
 | Un sample no suena | sample installed, luego MIAU_STRUDEL_LOG |
 | Un host remoto del REPL no se resuelve | strudel/server.py, lista SHIM_HOSTS |
@@ -157,6 +161,8 @@ Cuando un modulo cambia su contrato publico, el test del modulo correspondiente 
 **Nuevo motor de audio** - Entrada en BACKENDS (backends/backend.py). Si requiere build, receta en installer/installer.py. Rama nueva en pipeline.render con su _run_<motor>. Actualizar --engine choices y _engine_backends en cli.py.
 
 **Nuevo pack de samples** - Entrada Pack en strudel/catalog.py. Solo metadata. No hace falta tocar samples.py ni server.py.
+
+**Cambiar la UI inyectada en el REPL** - Editar el archivo correspondiente en strudel/inject/. `miau_bar.js` es el unico punto de entrada para botones y estado. Nunca embeber JS en server.py: si un cambio requiere logica nueva, va en inject/*.js y se referencia desde _render_index().
 
 **Actualizar la version del REPL vendorizado** - Correr el crawler contra https://strudel.cc/ que recorra el grafo de chunks Astro. Reemplazar miau_dio/strudel/site/. Revisar SHIM_HOSTS en server.py: puede haber hosts nuevos. Probar con MIAU_STRUDEL_LOG.
 

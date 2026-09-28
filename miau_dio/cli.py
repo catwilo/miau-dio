@@ -35,6 +35,7 @@ from miau_dio.instruments.model import Instrument, InstrumentError
 from miau_dio.installer.installer import ensure
 from miau_dio.pipeline import pipeline
 from miau_dio.store import store
+from miau_dio.project import layout as _playout
 from miau_dio.project import store as _pstore
 from miau_dio.project.model import Project, ProjectError as _ProjectError, Track
 
@@ -280,6 +281,14 @@ def cmd_project_new(a):
         )
     except _ProjectError as e:
         raise SystemExit(f"project new failed: {e}")
+    if a.at:
+        try:
+            root = _playout.create(project, a.at)
+        except _playout.LayoutError as e:
+            raise SystemExit(f"project new --at failed: {e}")
+        print(f"Created {project.name} at {root} "
+              f"({len(project.tracks)} tracks)")
+        return
     iid, stored = _pstore.add(project)
     print(f"Created [{iid}] {stored.name} ({len(stored.tracks)} tracks)")
 
@@ -297,11 +306,22 @@ def cmd_project_list(a):
 
 
 def cmd_project_show(a):
-    try:
-        p = _pstore.get(a.id)
-    except (KeyError, _pstore.ProjectStoreError) as e:
-        raise SystemExit(str(e))
-    print(f"[{a.id}] {p.name}")
+    if a.at:
+        if a.id:
+            raise SystemExit("show: pass either <id> or --at <path>, not both")
+        try:
+            p = _playout.read(a.at)
+        except _playout.LayoutError as e:
+            raise SystemExit(str(e))
+        print(f"[{a.at}] {p.name}")
+    else:
+        if not a.id:
+            raise SystemExit("show: <id> or --at <path> is required")
+        try:
+            p = _pstore.get(a.id)
+        except (KeyError, _pstore.ProjectStoreError) as e:
+            raise SystemExit(str(e))
+        print(f"[{a.id}] {p.name}")
     print(f"  tempo:          {p.tempo}")
     print(f"  time_signature: {p.time_signature}")
     print(f"  key:            {p.key}")
@@ -625,6 +645,9 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--key", default=None)
     s.add_argument("--track", action="append", default=[],
                    help="name:type[:content]; repeatable")
+    s.add_argument("--at", default=None,
+                   help="materialize a self-contained project directory "
+                        "at this path instead of storing in XDG")
     s.set_defaults(func=cmd_project_new)
 
     s = pjsub.add_parser("list", help="list projects")
@@ -632,7 +655,9 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(func=cmd_project_list)
 
     s = pjsub.add_parser("show", help="show one project")
-    s.add_argument("id")
+    s.add_argument("id", nargs="?", default=None)
+    s.add_argument("--at", default=None,
+                   help="read project.json from this directory instead of XDG")
     s.set_defaults(func=cmd_project_show)
 
     s = pjsub.add_parser("rm", help="delete a project")

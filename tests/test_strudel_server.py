@@ -50,18 +50,16 @@ class TestServe(_IsolatedCase):
         self.assertGreater(len(body), 1000)
 
     def test_missing_asset_404(self):
-        try:
+        with self.assertRaises(urllib.error.HTTPError) as cm:
             self._get("/_astro/nope.js")
-            self.fail("expected HTTPError")
-        except urllib.error.HTTPError as e:
-            self.assertEqual(e.code, 404)
+        self.assertEqual(cm.exception.code, 404)
+        cm.exception.close()
 
     def test_path_traversal_rejected(self):
-        try:
+        with self.assertRaises(urllib.error.HTTPError) as cm:
             self._get("/_astro/../etc/passwd")
-            self.fail("expected HTTPError")
-        except urllib.error.HTTPError as e:
-            self.assertIn(e.code, (400, 404))
+        self.assertIn(cm.exception.code, (400, 404))
+        cm.exception.close()
 
 
 class TestSamples(unittest.TestCase):
@@ -104,6 +102,56 @@ class TestSamples(unittest.TestCase):
         finally:
             srv.shutdown()
             srv.server_close()
+
+
+class TestOfflineInvariant(unittest.TestCase):
+    """The page must never reach the network.
+
+    The server injects a fetch shim whose SHIM_HOSTS list is the single
+    source of truth in Python (server.SHIM_HOSTS). These tests pin the
+    invariant: every host in that constant appears in the served HTML,
+    and an uncached URL returns 404 rather than proxying to the network.
+    """
+
+    def setUp(self):
+        from miau_dio.strudel import server as srvmod
+        self.srvmod = srvmod
+        self._tmp = tempfile.TemporaryDirectory()
+        self._prev = os.environ.get("XDG_DATA_HOME")
+        os.environ["XDG_DATA_HOME"] = self._tmp.name
+        self.srv, self.url, _ = srvmod.serve_background(port=0)
+        self.addCleanup(self.srv.shutdown)
+        self.addCleanup(self.srv.server_close)
+
+    def tearDown(self):
+        if self._prev is None:
+            os.environ.pop("XDG_DATA_HOME", None)
+        else:
+            os.environ["XDG_DATA_HOME"] = self._prev
+        self._tmp.cleanup()
+
+    def test_served_html_lists_every_shim_host(self):
+        with urllib.request.urlopen(self.url) as r:
+            body = r.read().decode("utf-8")
+        for host in self.srvmod.SHIM_HOSTS:
+            self.assertIn(host, body,
+                          f"shim host not advertised in page: {host}")
+
+    def test_uncached_shim_url_is_404(self):
+        # An uncached remote URL must 404 rather than proxy out.
+        path = ("shim/raw.githubusercontent.com/"
+                "tidalcycles/uzu-drumkit/main/does-not-exist.wav")
+        with self.assertRaises(urllib.error.HTTPError) as cm:
+            urllib.request.urlopen(self.url + path)
+        self.assertEqual(cm.exception.code, 404)
+        cm.exception.close()
+
+    def test_animations_toggle_present(self):
+        with urllib.request.urlopen(self.url) as r:
+            body = r.read().decode("utf-8")
+        self.assertIn("miau-anim-toggle", body)
+        self.assertIn("isPatternHighlightingEnabled", body)
+        self.assertIn("isFlashEnabled", body)
 
 
 class TestErrors(unittest.TestCase):

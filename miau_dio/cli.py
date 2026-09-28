@@ -649,7 +649,7 @@ def cmd_live(a):
 
     from miau_dio.strudel import StrudelError, samples_dir, serve_background
     try:
-        srv, url, _ = serve_background(port=a.port)
+        srv, url, _ = serve_background(port=a.port, project_dir=a.at)
     except StrudelError as e:
         raise SystemExit(f"live: {e}")
     try:
@@ -907,6 +907,9 @@ def build_parser() -> argparse.ArgumentParser:
                       help="skip the local server and open this URL instead")
     live.add_argument("--port", type=int, default=0,
                       help="local port (0 = OS picks a free one)")
+    live.add_argument("--at", default=None,
+                      help="bind a miau-dio project directory so the REPL "
+                           "can save/load files in its patterns/ folder")
     live.set_defaults(func=cmd_live)
 
     return p

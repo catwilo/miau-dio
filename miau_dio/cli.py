@@ -673,11 +673,17 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("abc")
     s.add_argument("--out", default="idea.wav")
     s.add_argument("--sf", default=None)
+    s.add_argument("--engine", choices=["timidity", "fluidsynth"],
+                   default="timidity",
+                   help="synthesis engine (default: timidity)")
     s.set_defaults(func=cmd_play_file)
 
     s = psub.add_parser("idea", help="render and play a saved idea")
     s.add_argument("id")
     s.add_argument("--sf", default=None)
+    s.add_argument("--engine", choices=["timidity", "fluidsynth"],
+                   default="timidity",
+                   help="synthesis engine (default: timidity)")
     s.add_argument("--silent", action="store_true")
     s.add_argument("--random", action="store_true",
                    help="override programs randomly from the library")

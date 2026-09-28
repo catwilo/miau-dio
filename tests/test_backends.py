@@ -16,7 +16,7 @@ from miau_dio.backends.backend import (
 class TestRegistryShape(unittest.TestCase):
     def test_known_backends_present(self):
         self.assertEqual(set(BACKENDS.keys()),
-                         {"abcmidi", "timidity", "sox"})
+                         {"abcmidi", "timidity", "sox", "fluidsynth"})
 
     def test_all_entries_are_backend(self):
         for b in BACKENDS.values():
@@ -62,6 +62,19 @@ class TestTimidityEntry(unittest.TestCase):
         self.assertIsNone(BACKENDS["timidity"].source)
 
 
+class TestFluidsynthEntry(unittest.TestCase):
+    def test_binary_name(self):
+        self.assertEqual(BACKENDS["fluidsynth"].name, "fluidsynth")
+
+    def test_same_package_both_platforms(self):
+        b = BACKENDS["fluidsynth"]
+        self.assertEqual(b.apt_pkg, "fluidsynth")
+        self.assertEqual(b.termux_pkg, "fluidsynth")
+
+    def test_no_source_recipe(self):
+        self.assertIsNone(BACKENDS["fluidsynth"].source)
+
+
 class TestSoxEntry(unittest.TestCase):
     def test_binary_name(self):
         self.assertEqual(BACKENDS["sox"].name, "sox")
@@ -83,9 +96,9 @@ class TestProfiles(unittest.TestCase):
     def test_playback_adds_timidity(self):
         self.assertEqual(PROFILES["playback"], ["abcmidi", "timidity"])
 
-    def test_full_adds_sox(self):
+    def test_full_adds_fluidsynth_and_sox(self):
         self.assertEqual(PROFILES["full"],
-                         ["abcmidi", "timidity", "sox"])
+                         ["abcmidi", "timidity", "fluidsynth", "sox"])
 
     def test_every_profile_entry_exists_in_registry(self):
         for name, members in PROFILES.items():

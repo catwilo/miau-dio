@@ -53,13 +53,18 @@ BACKENDS: dict[str, Backend] = {
         apt_pkg="sox",
         termux_pkg="sox",
     ),
+    "fluidsynth": Backend(
+        name="fluidsynth",
+        apt_pkg="fluidsynth",
+        termux_pkg="fluidsynth",
+    ),
 }
 
 # Profiles: named subsets the installer can target.
 PROFILES: dict[str, list[str]] = {
     "minimal": ["abcmidi"],
     "playback": ["abcmidi", "timidity"],
-    "full": ["abcmidi", "timidity", "sox"],
+    "full": ["abcmidi", "timidity", "fluidsynth", "sox"],
 }
 
 

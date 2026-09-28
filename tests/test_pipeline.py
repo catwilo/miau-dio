@@ -143,6 +143,69 @@ class TestRunHelperFailure(_PipelineCase):
         self.assertIn("boom", str(cm.exception))
 
 
+class TestEngineSelector(_PipelineCase):
+    def test_default_engine_is_timidity(self):
+        calls = []
+        with mock.patch.object(pipeline.subprocess, "run",
+                               side_effect=self._run_ok(calls)):
+            pipeline.render(str(self.abc), str(self.out),
+                            soundfont=str(self.sf), gain=0)
+        self.assertEqual(calls[1][0][0], "timidity")
+
+    def test_fluidsynth_engine_used(self):
+        calls = []
+        with mock.patch.object(pipeline.subprocess, "run",
+                               side_effect=self._run_ok(calls)):
+            pipeline.render(str(self.abc), str(self.out),
+                            soundfont=str(self.sf), gain=0,
+                            engine="fluidsynth")
+        self.assertEqual(calls[0][0][0], "abc2midi")
+        self.assertEqual(calls[1][0][0], "fluidsynth")
+
+    def test_fluidsynth_uses_render_flags(self):
+        calls = []
+        with mock.patch.object(pipeline.subprocess, "run",
+                               side_effect=self._run_ok(calls)):
+            pipeline.render(str(self.abc), str(self.out),
+                            soundfont=str(self.sf), gain=0,
+                            engine="fluidsynth")
+        cmd = calls[1][0]
+        self.assertIn("-n", cmd)
+        self.assertIn("-i", cmd)
+        self.assertIn("-F", cmd)
+        self.assertEqual(cmd[cmd.index("-F") + 1], str(self.out))
+        self.assertIn(str(self.sf), cmd)
+
+    def test_fluidsynth_gain_scaled(self):
+        calls = []
+        with mock.patch.object(pipeline.subprocess, "run",
+                               side_effect=self._run_ok(calls)):
+            pipeline.render(str(self.abc), str(self.out),
+                            soundfont=str(self.sf), gain=6.0,
+                            engine="fluidsynth")
+        cmd = calls[1][0]
+        self.assertIn("-g", cmd)
+        self.assertEqual(cmd[cmd.index("-g") + 1], "0.6")
+
+    def test_fluidsynth_zero_gain_omits_flag(self):
+        calls = []
+        with mock.patch.object(pipeline.subprocess, "run",
+                               side_effect=self._run_ok(calls)):
+            pipeline.render(str(self.abc), str(self.out),
+                            soundfont=str(self.sf), gain=0,
+                            engine="fluidsynth")
+        cmd = calls[1][0]
+        self.assertNotIn("-g", cmd)
+
+    def test_unknown_engine_rejected(self):
+        with self.assertRaises(ValueError):
+            pipeline.render(str(self.abc), str(self.out),
+                            soundfont=str(self.sf), engine="bogus")
+
+    def test_known_engines_tuple(self):
+        self.assertEqual(pipeline.ENGINES, ("timidity", "fluidsynth"))
+
+
 class TestReturnValue(_PipelineCase):
     def test_returns_out_path(self):
         calls = []

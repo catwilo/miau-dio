@@ -48,12 +48,13 @@ def audio_player() -> list[str]:
     """Return a command prefix to play a wav file on this platform.
 
     The file path is appended by the caller. Picks the first available
-    player; sox 'play' works on Termux, aplay/mpv are common on Debian.
+    player; mpv is preferred because it is the canonical player of the
+    miau-dio stack (and is in Termux repos), then sox 'play' and aplay.
     """
     candidates = (
+        ["mpv", "--no-video", "--really-quiet"],
         ["play", "-q"],      # sox, works on Termux and Debian
         ["aplay", "-q"],     # ALSA, common on Debian desktop
-        ["mpv", "--no-video", "--really-quiet"],
     )
     for c in candidates:
         if shutil.which(c[0]):

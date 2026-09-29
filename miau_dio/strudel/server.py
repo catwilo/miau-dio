@@ -144,6 +144,34 @@ def cache_dir() -> pathlib.Path:
     return d
 
 
+def _log_path():
+    """Optional request log destination, from MIAU_STRUDEL_LOG.
+
+    Set MIAU_STRUDEL_LOG=/path/to/log before starting `miau-dio live` to
+    append one line per request: "<status> <method> <path> -> <target>".
+    The path is read on every request so the log can be rotated by moving
+    the file; leaving the env var unset disables logging entirely.
+    """
+    raw = os.environ.get("MIAU_STRUDEL_LOG")
+    if not raw:
+        return None
+    p = pathlib.Path(raw).expanduser()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def _log_request(status, method, path, target):
+    lp = _log_path()
+    if lp is None:
+        return
+    try:
+        with lp.open("a", encoding="utf-8") as f:
+            f.write(f"{status} {method} {path} -> {target}\n")
+    except OSError:
+        # Never let logging break a request.
+        pass
+
+
 def _list_flat_samples() -> dict[str, str]:
     out: dict[str, str] = {}
     for p in sorted(samples_dir().iterdir()):
@@ -192,7 +220,9 @@ class _Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass
 
-    def _send(self, status: int, ctype: str, body: bytes) -> None:
+    def _send(self, status: int, ctype: str, body: bytes,
+              target: str = "") -> None:
+        _log_request(status, self.command or "?", self.path or "?", target)
         self.send_response(status)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
@@ -234,9 +264,9 @@ class _Handler(http.server.BaseHTTPRequestHandler):
 
     def _serve_file(self, path: pathlib.Path) -> None:
         if not path.is_file():
-            self._send(404, "text/plain", b"not found")
+            self._send(404, "text/plain", b"not found", str(path))
             return
-        self._send(200, self._ctype_for(path), path.read_bytes())
+        self._send(200, self._ctype_for(path), path.read_bytes(), str(path))
 
     def _serve_inject(self, name: str) -> None:
         """Serve an inject/ asset, substituting __SHIM_HOSTS__ in JS files."""
@@ -248,7 +278,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         if name == "fetch_shim.js":
             body = body.replace(b"__SHIM_HOSTS__",
                                 _shim_hosts_js().encode())
-        self._send(200, self._ctype_for(path), body)
+        self._send(200, self._ctype_for(path), body, f"inject/{name}")
 
     def _drain_body(self, length: int) -> None:
         remaining = length

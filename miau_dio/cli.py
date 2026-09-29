@@ -608,19 +608,44 @@ def cmd_sample_install(a):
 
 
 def cmd_sample_preview(a):
-    """Play a few sample assets from a pack without installing it."""
+    """Play samples from a pack one by one. Ctrl+C stops early.
+
+    Default plays every sample in manifest order. `--count N` limits to
+    N samples spread evenly across the pack (useful for a quick taste).
+    Prints index, manifest path and file size for each sample so the
+    user knows exactly what is playing.
+    """
     import shutil as _shutil
     import subprocess as _sub
     try:
-        _scatalog.get(a.name)
+        pack = _scatalog.get(a.name)
     except KeyError as e:
         raise SystemExit(str(e))
+
+    if _samples.is_installed(a.name):
+        source = "local cache"
+    else:
+        source = "network (fetched on the fly)"
+
+    print(f"preview: {pack.name}")
+    print(f"  {pack.description}")
+    print(f"  license: {pack.license}")
+    print(f"  approx size if installed: ~{pack.approx_mb:.1f} MB")
+    print(f"  source: {source}")
+    if a.count == 0:
+        print(f"  playing: every sample, in manifest order")
+    else:
+        print(f"  playing: {a.count} sample(s) spread across the pack")
+    print("  press Ctrl+C to stop early.")
+    print()
+
     try:
         files = _samples.preview(a.name, count=a.count)
     except _samples.SampleError as e:
         raise SystemExit(f"preview failed: {e}")
     if not files:
         raise SystemExit("preview: no files returned")
+
     player = None
     for candidate in (["mpv", "--no-video", "--really-quiet"],
                       ["play", "-q"],
@@ -628,19 +653,33 @@ def cmd_sample_preview(a):
         if _shutil.which(candidate[0]):
             player = candidate
             break
-    if player is None:
-        print("downloaded preview files (no player found):")
-        for f in files:
-            print(f"  {f}")
-        return
+
+    total = len(files)
+    played = 0
     try:
-        _sub.run([*player, *[str(f) for f in files]], check=True)
-    except _sub.CalledProcessError:
-        pass
+        for i, (label, path) in enumerate(files, 1):
+            try:
+                size = path.stat().st_size
+                size_txt = f"{size/1024:.1f} KB" if size < 1024*1024 \
+                           else f"{size/1024/1024:.1f} MB"
+                print(f"  [{i:>3}/{total}] {label}  ({size_txt})")
+                if player is not None:
+                    _sub.run([*player, str(path)], check=False)
+                else:
+                    print(f"        file: {path}")
+                played += 1
+            except KeyboardInterrupt:
+                raise
+    except KeyboardInterrupt:
+        print()
+        print(f"stopped after {played} of {total} sample(s).")
     finally:
-        # Clean up the temp directory.
-        parent = files[0].parent
-        _shutil.rmtree(parent, ignore_errors=True)
+        _samples.preview_cleanup(files)
+
+    if played == total and player is not None:
+        print()
+        print("done. install with:")
+        print(f"  miau-dio sample install {pack.name}")
 
 
 def cmd_sample_remove(a):
@@ -947,10 +986,11 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(func=cmd_sample_remove)
 
     s = ssub.add_parser("preview",
-                        help="play a few samples from a pack (no install)")
+                        help="play samples from a pack without installing")
     s.add_argument("name")
-    s.add_argument("--count", type=int, default=3,
-                   help="how many sample assets to play (default: 3)")
+    s.add_argument("--count", type=int, default=0,
+                   help="how many samples to play; 0 = all of them in order "
+                        "(default: 0). Ctrl+C stops early.")
     s.set_defaults(func=cmd_sample_preview)
 
     # ---- live --------------------------------------------------------------

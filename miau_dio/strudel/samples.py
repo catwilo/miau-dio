@@ -163,88 +163,103 @@ def remove(name: str) -> int:
     return removed
 
 
-def preview(name: str, count: int = 3) -> list[pathlib.Path]:
-    """Download up to `count` sample assets to temp files and return them.
+def preview(name: str, count: int = 0) -> list[tuple[str, pathlib.Path]]:
+    """Return up to `count` sample assets from a pack as (label, path).
 
-    Picks the first asset of each distinct top-level key in the manifest
-    so the preview covers different sounds (kick, snare, ...). Does NOT
-    touch the XDG cache: writes to a TemporaryDirectory that the caller
-    owns. Files are small (individual samples, not the full pack).
+    `count == 0` (default) returns every entry in manifest order.
+    `count > 0` returns that many entries, spread evenly so a small
+    preview covers different sounds.
 
-    If the pack is already installed, reads from the cache instead of
-    fetching over the network.
+    `label` is a short human-readable identifier built from the manifest
+    path (e.g. "bd/10_bd_switchangel.wav" for a nested pack, or
+    "piano/A0v8.mp3" for a flat one).
+
+    If the pack is installed, files are read from the XDG cache. Otherwise
+    they are fetched to a temporary directory the caller owns (see
+    `preview_cleanup`).
     """
     import tempfile
     pack = catalog.get(name)
 
-    # If installed, use the cached copy of the manifest and assets.
+    # Get (label, url, local_path_or_None) tuples.
+    entries: list[tuple[str, str, pathlib.Path | None]] = []
+
     if is_installed(name):
         record = json.loads(_record_path(name).read_text())
-        cached_manifest_url = record.get("manifest_url")
         cached_files = record.get("files", [])
-        if cached_manifest_url and cached_files:
-            # Pick the first file of each top-level category dir under the
-            # manifest URL's path.
-            base_prefix = None
-            # Derive the base prefix from the manifest URL's path.
-            mu = urllib.parse.urlparse(cached_manifest_url)
-            base_dir = mu.path.rsplit("/", 1)[0].lstrip("/")
-            # Find first file per parent directory of the manifest.
-            seen_dirs = set()
-            picks = []
-            for rel in cached_files:
-                rel_str = str(rel)
-                # cached_files are relative to cache_dir, e.g.
-                # raw.githubusercontent.com/tidalcycles/uzu-drumkit/main/bd/x.wav
-                # Strip host.
-                parts = rel_str.split("/", 1)
-                if len(parts) < 2:
-                    continue
-                path_in_repo = parts[1]
-                if not path_in_repo.startswith(base_dir + "/"):
-                    continue
-                sub = path_in_repo[len(base_dir) + 1:]
-                category = sub.split("/", 1)[0] if "/" in sub else ""
-                if not category or category in seen_dirs:
-                    continue
-                seen_dirs.add(category)
-                picks.append(cache_dir() / rel_str)
-                if len(picks) >= count:
-                    break
-            if picks:
-                return picks
+        for rel in cached_files:
+            rel_str = str(rel)
+            parts = rel_str.split("/", 1)
+            if len(parts) < 2:
+                continue
+            path_in_repo = parts[1]
+            if path_in_repo.endswith(".json"):
+                continue
+            local = cache_dir() / rel_str
+            # Skip entries the record claims but that are missing on disk.
+            # The cache can be partially pruned (e.g. by an interrupted
+            # install); a missing file is not an error, just a hole.
+            if not local.is_file():
+                continue
+            entries.append((path_in_repo, "", local))
+    if not entries:
+        body, urls = _collect_urls(pack)
+        manifest = json.loads(body)
+        base = manifest.get("_base",
+                            pack.manifest_url.rsplit("/", 1)[0] + "/")
+        for u in urls:
+            if u == pack.manifest_url:
+                continue
+            if not u.startswith(base):
+                continue
+            entries.append((u[len(base):], u, None))
 
-    # Not installed (or install incomplete): fetch on demand.
-    body, urls = _collect_urls(pack)
-    manifest = json.loads(body)
-    base = manifest.get("_base", pack.manifest_url.rsplit("/", 1)[0] + "/")
-    seen_dirs = set()
-    picks = []
-    for u in urls:
-        if u == pack.manifest_url:
-            continue
-        # Category = first path component below base.
-        if not u.startswith(base):
-            continue
-        sub = u[len(base):]
-        category = sub.split("/", 1)[0] if "/" in sub else ""
-        if not category or category in seen_dirs:
-            continue
-        seen_dirs.add(category)
-        picks.append(u)
-        if len(picks) >= count:
-            break
-    if not picks:
+    if not entries:
         raise SampleError(f"no sample assets found in {name}")
 
-    td = pathlib.Path(tempfile.mkdtemp(prefix=f"miau-preview-{name}-"))
-    out = []
-    for u in picks:
-        fname = u.rsplit("/", 1)[-1] or "sample.wav"
-        dest = td / fname
-        dest.write_bytes(_fetch(u))
-        out.append(dest)
+    # Build the pick list. count == 0 means "every entry, in order".
+    # count > 0 spreads evenly through the list so a small preview covers
+    # different sounds rather than the first N (which share a category).
+    entries.sort(key=lambda e: e[0])
+    n = len(entries)
+    if count <= 0 or count >= n:
+        picks_idx = list(range(n))
+    else:
+        step = n / count
+        picks_idx = sorted({int(i * step) for i in range(count)})
+
+    # Materialize each pick: reuse cache or fetch to temp.
+    needs_fetch = [i for i in picks_idx if entries[i][2] is None]
+    td = None
+    if needs_fetch:
+        td = pathlib.Path(tempfile.mkdtemp(prefix=f"miau-preview-{name}-"))
+
+    out: list[tuple[str, pathlib.Path]] = []
+    for i in picks_idx:
+        label, url, local = entries[i]
+        if local is not None:
+            out.append((label, local))
+        else:
+            fname = url.rsplit("/", 1)[-1] or "sample.wav"
+            dest = td / fname
+            dest.write_bytes(_fetch(url))
+            out.append((label, dest))
     return out
+
+
+def preview_cleanup(items: list[tuple[str, pathlib.Path]]) -> None:
+    """Remove the temp directory holding a preview, if any.
+
+    Safe to call multiple times. Only deletes directories whose name
+    starts with `miau-preview-` (so a preview that pointed at the XDG
+    cache is not removed).
+    """
+    import shutil as _sh
+    for _, path in items:
+        parent = path.parent
+        if parent.name.startswith("miau-preview-"):
+            _sh.rmtree(parent, ignore_errors=True)
+            return
 
 
 def size_on_disk(name: str) -> int:
@@ -262,5 +277,5 @@ def size_on_disk(name: str) -> int:
 
 __all__ = [
     "SampleError", "cache_dir", "install", "installed",
-    "is_installed", "preview", "remove", "size_on_disk",
+    "is_installed", "preview", "preview_cleanup", "remove", "size_on_disk",
 ]

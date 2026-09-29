@@ -64,7 +64,7 @@ La CLI tiene una jerarquía de grupos. Todos los grupos tienen `--help`.
 - `idea add <nombre> <archivo.abc>` — guarda un `.abc` existente.
 - `idea list [--tag X] [-s QUERY] [--json]` — lista / filtra / busca.
 - `idea show <id>` — detalle completo.
-- `idea edit <id>` — abre el `.abc` en `$EDITOR` (o nvim / nano). Si hubo
+- `idea edit <id>` — abre el `.abc` en `$EDITOR`. Si hubo
   cambios, limpia la caché de audio.
 - `idea rename <id> <nuevo>` / `idea dup <id> [--name]` — el id es estable
   y no cambia.

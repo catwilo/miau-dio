@@ -91,6 +91,15 @@ Documento operativo. Responde una pregunta: dado un sintoma, que archivo abro pr
 
 **miau_dio/strudel/site/** - Copia estatica del REPL oficial de strudel.cc (HTML, chunks Astro, fuentes). No se edita a mano. Se regenera con el crawler de vendorizado. Solo se toca para actualizar la version del REPL.
 
+**Actualizar el sitio vendorizado** - El sitio oficial cambia con cada release de strudel.cc: los hashes de chunks (`index.BF19ZmMS.js`) son distintos en cada version. Para actualizar:
+  1. Correr el crawler recursivo contra `https://strudel.cc/` (recorre el grafo de imports de Astro, no solo el HTML).
+  2. Reemplazar `miau_dio/strudel/site/` con lo descargado.
+  3. Revisar `SHIM_HOSTS` en `strudel/server.py`: la version nueva puede pedir hosts distintos.
+  4. Probar en el navegador con `MIAU_STRUDEL_LOG` para ver que no se escape ningun recurso a internet.
+  5. Actualizar `tests/test_strudel_server.py` si aparecen nuevos chunks con hash distinto en los tests.
+
+**`_local_ipv4_addresses()` (en `strudel/server.py`)** - Devuelve las IPs no-loopback del host. Usa tres sondas en orden: `tailscale ip -4`, `ifconfig` (parsea las lineas `inet ...`; funciona en Termux sin root con warning benigno de netlink), `hostname -I` (ultimo recurso). Se usa solo en el mensaje informativo al arrancar `live --host 0.0.0.0`. Tests en `tests/test_local_ip.py`.
+
 **miau_dio/strudel/inject/** - Assets propios inyectados en el REPL vendoreado. `fetch_shim.js` (reemplaza __SHIM_HOSTS__ con la tupla de server.py al servirse) corta cualquier peticion a hosts remotos. `miau_bar.js` es la unica barra de controles: un footer full-width abajo con el toggle de animaciones (siempre) y save/load/estado del proyecto (solo si la sesion arranco con --at). El script es idempotente y se re-instala via MutationObserver si una pasada del DOM (hidratacion React) lo quita. Se sirven via /miau/<file>.
 
 ### Otros

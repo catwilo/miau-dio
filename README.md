@@ -102,13 +102,25 @@ La CLI tiene una jerarquía de grupos. Todos los grupos tienen `--help`.
 
 ### live — REPL de Strudel local
 
-- `live [--url URL] [--port N]` — arranca un servidor HTTP local que
-  sirve el **REPL oficial de Strudel** vendorizado en el repo, abre el
-  navegador y bloquea hasta Ctrl+C. Todo el motor corre en el navegador
-  (Web Audio), el servidor solo reparte archivos. Sin `--url`, la sesión
-  es offline: las peticiones a hosts remotos (samples, hydra) se
-  reescriben a `/shim/<host>/<path>` y se resuelven desde el cache local
-  en `XDG_DATA_HOME/miau-dio/strudel/cache/`.
+- `live [--url URL] [--host ADDR] [--port N] [--at <ruta>]` — arranca un
+  servidor HTTP local que sirve el **REPL oficial de Strudel**
+  vendorizado en el repo, abre el navegador y bloquea hasta Ctrl+C.
+  Todo el motor corre en el navegador (Web Audio), el servidor solo
+  reparte archivos. Sin `--url`, la sesión es offline: las peticiones a
+  hosts remotos (samples, hydra) se reescriben a `/shim/<host>/<path>` y
+  se resuelven desde el cache local en
+  `XDG_DATA_HOME/miau-dio/strudel/cache/`.
+
+  **Defaults**: `--host 0.0.0.0` (acepta conexiones de Tailscale y LAN)
+  y `--port 8765`. Al arrancar imprime las URLs de red detectadas, así
+  que desde otro dispositivo de la tailnet basta abrir
+  `http://<tailscale-ip>:8765/`. Para uso estrictamente local, pasá
+  `--host 127.0.0.1`. Con `--port 0` el SO elige un puerto libre.
+
+  **`--at <ruta>`**: ata un proyecto musical (directorio con
+  `project.json`) al REPL. La página gana un footer con save/load de
+  patterns y muestra el nombre del proyecto. Sin `--at`, el REPL
+  funciona igual pero sin las funciones de proyecto.
 
 ### sample — gestión del catálogo de samples
 

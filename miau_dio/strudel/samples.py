@@ -163,6 +163,90 @@ def remove(name: str) -> int:
     return removed
 
 
+def preview(name: str, count: int = 3) -> list[pathlib.Path]:
+    """Download up to `count` sample assets to temp files and return them.
+
+    Picks the first asset of each distinct top-level key in the manifest
+    so the preview covers different sounds (kick, snare, ...). Does NOT
+    touch the XDG cache: writes to a TemporaryDirectory that the caller
+    owns. Files are small (individual samples, not the full pack).
+
+    If the pack is already installed, reads from the cache instead of
+    fetching over the network.
+    """
+    import tempfile
+    pack = catalog.get(name)
+
+    # If installed, use the cached copy of the manifest and assets.
+    if is_installed(name):
+        record = json.loads(_record_path(name).read_text())
+        cached_manifest_url = record.get("manifest_url")
+        cached_files = record.get("files", [])
+        if cached_manifest_url and cached_files:
+            # Pick the first file of each top-level category dir under the
+            # manifest URL's path.
+            base_prefix = None
+            # Derive the base prefix from the manifest URL's path.
+            mu = urllib.parse.urlparse(cached_manifest_url)
+            base_dir = mu.path.rsplit("/", 1)[0].lstrip("/")
+            # Find first file per parent directory of the manifest.
+            seen_dirs = set()
+            picks = []
+            for rel in cached_files:
+                rel_str = str(rel)
+                # cached_files are relative to cache_dir, e.g.
+                # raw.githubusercontent.com/tidalcycles/uzu-drumkit/main/bd/x.wav
+                # Strip host.
+                parts = rel_str.split("/", 1)
+                if len(parts) < 2:
+                    continue
+                path_in_repo = parts[1]
+                if not path_in_repo.startswith(base_dir + "/"):
+                    continue
+                sub = path_in_repo[len(base_dir) + 1:]
+                category = sub.split("/", 1)[0] if "/" in sub else ""
+                if not category or category in seen_dirs:
+                    continue
+                seen_dirs.add(category)
+                picks.append(cache_dir() / rel_str)
+                if len(picks) >= count:
+                    break
+            if picks:
+                return picks
+
+    # Not installed (or install incomplete): fetch on demand.
+    body, urls = _collect_urls(pack)
+    manifest = json.loads(body)
+    base = manifest.get("_base", pack.manifest_url.rsplit("/", 1)[0] + "/")
+    seen_dirs = set()
+    picks = []
+    for u in urls:
+        if u == pack.manifest_url:
+            continue
+        # Category = first path component below base.
+        if not u.startswith(base):
+            continue
+        sub = u[len(base):]
+        category = sub.split("/", 1)[0] if "/" in sub else ""
+        if not category or category in seen_dirs:
+            continue
+        seen_dirs.add(category)
+        picks.append(u)
+        if len(picks) >= count:
+            break
+    if not picks:
+        raise SampleError(f"no sample assets found in {name}")
+
+    td = pathlib.Path(tempfile.mkdtemp(prefix=f"miau-preview-{name}-"))
+    out = []
+    for u in picks:
+        fname = u.rsplit("/", 1)[-1] or "sample.wav"
+        dest = td / fname
+        dest.write_bytes(_fetch(u))
+        out.append(dest)
+    return out
+
+
 def size_on_disk(name: str) -> int:
     """Total bytes currently used by an installed pack."""
     if not is_installed(name):
@@ -178,5 +262,5 @@ def size_on_disk(name: str) -> int:
 
 __all__ = [
     "SampleError", "cache_dir", "install", "installed",
-    "is_installed", "remove", "size_on_disk",
+    "is_installed", "preview", "remove", "size_on_disk",
 ]

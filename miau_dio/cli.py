@@ -607,6 +607,42 @@ def cmd_sample_install(a):
         print(f"[ok]   {name}: {_fmt_mb(size, is_bytes=True)} on disk")
 
 
+def cmd_sample_preview(a):
+    """Play a few sample assets from a pack without installing it."""
+    import shutil as _shutil
+    import subprocess as _sub
+    try:
+        _scatalog.get(a.name)
+    except KeyError as e:
+        raise SystemExit(str(e))
+    try:
+        files = _samples.preview(a.name, count=a.count)
+    except _samples.SampleError as e:
+        raise SystemExit(f"preview failed: {e}")
+    if not files:
+        raise SystemExit("preview: no files returned")
+    player = None
+    for candidate in (["mpv", "--no-video", "--really-quiet"],
+                      ["play", "-q"],
+                      ["aplay", "-q"]):
+        if _shutil.which(candidate[0]):
+            player = candidate
+            break
+    if player is None:
+        print("downloaded preview files (no player found):")
+        for f in files:
+            print(f"  {f}")
+        return
+    try:
+        _sub.run([*player, *[str(f) for f in files]], check=True)
+    except _sub.CalledProcessError:
+        pass
+    finally:
+        # Clean up the temp directory.
+        parent = files[0].parent
+        _shutil.rmtree(parent, ignore_errors=True)
+
+
 def cmd_sample_remove(a):
     names = a.names or []
     if not names:
@@ -909,6 +945,13 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("names", nargs="+")
     s.add_argument("-y", "--yes", action="store_true")
     s.set_defaults(func=cmd_sample_remove)
+
+    s = ssub.add_parser("preview",
+                        help="play a few samples from a pack (no install)")
+    s.add_argument("name")
+    s.add_argument("--count", type=int, default=3,
+                   help="how many sample assets to play (default: 3)")
+    s.set_defaults(func=cmd_sample_preview)
 
     # ---- live --------------------------------------------------------------
     live = top.add_parser("live", help="open a local live-coding environment")

@@ -5,6 +5,7 @@ URLs to bytes.
 """
 import json
 import os
+import pathlib
 import tempfile
 import unittest
 from unittest import mock
@@ -131,6 +132,164 @@ class TestSizeOnDisk(_IsolatedCase):
         # 4 fake files: manifest (28) + wav1 (4) + wav2 (4) + wav3 (4).
         self.assertEqual(samples.size_on_disk("testpack"),
                          len(_MANIFEST) + 4 + 4 + 4)
+
+
+class TestVendored(_IsolatedCase):
+    """The vendor/ tree ships packs inside the repo, no network, no cache."""
+
+    def _fake_vendor(self, name="vpack", files=None):
+        if files is None:
+            files = {"vpack.json": b"{}",
+                     "bd/one.wav": b"wavA",
+                     "sd/two.wav": b"wavB"}
+        root = pathlib.Path(self._tmp.name) / "vendor" / name
+        for rel, body in files.items():
+            p = root / rel
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_bytes(body)
+        return root
+
+    def test_vendored_lists_pack_with_manifest(self):
+        self._fake_vendor("vpack")
+        root = pathlib.Path(self._tmp.name) / "vendor"
+        with mock.patch.object(samples, "_vendor_root", return_value=root):
+            self.assertEqual(samples.vendored(), ["vpack"])
+
+    def test_vendored_ignores_dir_without_json(self):
+        root = pathlib.Path(self._tmp.name) / "vendor"
+        (root / "nomanifest").mkdir(parents=True)
+        (root / "nomanifest" / "x.wav").write_bytes(b"x")
+        with mock.patch.object(samples, "_vendor_root", return_value=root):
+            self.assertEqual(samples.vendored(), [])
+
+    def test_available_unions_cache_and_vendor(self):
+        root = pathlib.Path(self._tmp.name) / "vendor"
+        (root / "vpack").mkdir(parents=True)
+        (root / "vpack" / "v.json").write_bytes(b"{}")
+        with mock.patch.object(samples, "_vendor_root", return_value=root):
+            self.assertEqual(samples.available(), ["vpack"])
+
+    def test_is_installed_is_cache_only(self):
+        root = pathlib.Path(self._tmp.name) / "vendor"
+        (root / "vpack").mkdir(parents=True)
+        (root / "vpack" / "v.json").write_bytes(b"{}")
+        with mock.patch.object(samples, "_vendor_root", return_value=root):
+            self.assertFalse(samples.is_installed("vpack"))
+            self.assertEqual(samples.installed(), [])
+
+    def test_install_vendored_raises(self):
+        root = pathlib.Path(self._tmp.name) / "vendor"
+        (root / "vpack").mkdir(parents=True)
+        (root / "vpack" / "v.json").write_bytes(b"{}")
+        with mock.patch.object(samples, "_vendor_root", return_value=root):
+            with self.assertRaises(samples.SampleError):
+                samples.install("vpack")
+
+    def test_remove_vendored_raises(self):
+        root = pathlib.Path(self._tmp.name) / "vendor"
+        (root / "vpack").mkdir(parents=True)
+        (root / "vpack" / "v.json").write_bytes(b"{}")
+        with mock.patch.object(samples, "_vendor_root", return_value=root):
+            with self.assertRaises(samples.SampleError):
+                samples.remove("vpack")
+
+    def test_size_on_disk_vendored(self):
+        self._fake_vendor("vpack", files={
+            "vpack.json": b"{}", "bd/a.wav": b"1234", "sd/b.wav": b"5678"})
+        root = pathlib.Path(self._tmp.name) / "vendor"
+        with mock.patch.object(samples, "_vendor_root", return_value=root):
+            self.assertEqual(samples.size_on_disk("vpack"), 2 + 4 + 4)
+
+    def test_preview_vendored_reads_repo_files(self):
+        self._fake_vendor("vpack")
+        root = pathlib.Path(self._tmp.name) / "vendor"
+        fake_pack = mock.MagicMock()
+        fake_pack.name = "vpack"
+        fake_pack.manifest_url = "https://example.test/vpack.json"
+        with mock.patch.object(samples, "_vendor_root", return_value=root):
+            with mock.patch.object(samples.catalog, "get",
+                                   return_value=fake_pack):
+                with mock.patch.object(samples, "_fetch") as fetch_mock:
+                    items = samples.preview("vpack")
+        fetch_mock.assert_not_called()
+        labels = sorted(label for label, _ in items)
+        self.assertEqual(labels, ["bd/one.wav", "sd/two.wav"])
+        for _, p in items:
+            self.assertTrue(p.is_file())
+
+
+class TestRealVendorTree(unittest.TestCase):
+    """Pin the packs actually shipped with the repo."""
+
+    def test_uzu_and_dirt_are_vendored(self):
+        self.assertIn("uzu", samples.vendored())
+        self.assertIn("dirt", samples.vendored())
+
+    def test_uzu_manifest_present(self):
+        root = samples._vendor_root() / "uzu"
+        self.assertTrue((root / "strudel.json").is_file())
+        self.assertTrue((root / "bd" / "10_bd_switchangel.wav").is_file())
+
+    def test_dirt_manifest_present(self):
+        root = samples._vendor_root() / "dirt"
+        self.assertTrue((root / "Dirt-Samples.json").is_file())
+        self.assertTrue((root / "casio" / "high.wav").is_file())
+
+    def test_guitar_vendored(self):
+        self.assertIn("guitar", samples.vendored())
+        root = samples._vendor_root() / "guitar"
+        self.assertTrue((root / "guitar.json").is_file())
+        self.assertTrue((root / "A2.wav").is_file())
+
+    def test_guitar_manifest_maps_sharps(self):
+        import json as _json
+        manifest = _json.loads(
+            (samples._vendor_root() / "guitar" / "guitar.json").read_text())
+        notes = manifest["guitar"]
+        self.assertIn("A2", notes)
+        self.assertIn("A#2", notes)  # converted from tonejs' As2
+        self.assertEqual(notes["A#2"], "As2.wav")
+
+    def test_trumpet_vendored(self):
+        self.assertIn("trumpet", samples.vendored())
+        root = samples._vendor_root() / "trumpet"
+        self.assertTrue((root / "trumpet.json").is_file())
+
+    def test_trumpet_manifest_maps_sharp_url_encoded(self):
+        import json as _json
+        manifest = _json.loads(
+            (samples._vendor_root() / "trumpet" / "trumpet.json").read_text())
+        notes = manifest["trumpet"]
+        self.assertIn("A#3", notes)
+        self.assertTrue(all("%23" in f or "#" not in f for f in notes["A#3"]))
+        disk = samples._vendor_root() / "trumpet"
+        for f in notes["A#3"]:
+            self.assertTrue((disk / f).is_file(), f)
+
+    def test_trumpet_stac_vendored(self):
+        self.assertIn("trumpet_stac", samples.vendored())
+        root = samples._vendor_root() / "trumpet_stac"
+        self.assertTrue((root / "trumpet_stac.json").is_file())
+
+    def test_trombone_vendored(self):
+        self.assertIn("trombone", samples.vendored())
+        root = samples._vendor_root() / "trombone"
+        self.assertTrue((root / "trombone.json").is_file())
+
+    def test_trombone_stac_vendored(self):
+        self.assertIn("trombone_stac", samples.vendored())
+        root = samples._vendor_root() / "trombone_stac"
+        self.assertTrue((root / "trombone_stac.json").is_file())
+
+    def test_trombone_manifest_url_encoded_base(self):
+        import json as _json
+        manifest = _json.loads(
+            (samples._vendor_root() / "trombone" / "trombone.json").read_text())
+        self.assertIn("Tenor%20Trombone", manifest["_base"])
+        for files in manifest["trombone"].values():
+            for f in files:
+                self.assertNotIn(" ", f, "manifest value must not have raw space")
+                self.assertNotIn("#", f, "manifest value must use %23")
 
 
 if __name__ == "__main__":

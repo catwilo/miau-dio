@@ -1,0 +1,45 @@
+{
+  "_base": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Brass/Trumpet/sus/",
+  "trumpet": {
+    "A#3": [
+      "Sum_SHTrumpet_sus_A%233_v1_rr1.wav",
+      "Sum_SHTrumpet_sus_A%233_v3_rr1.wav"
+    ],
+    "A2": [
+      "Sum_SHTrumpet_sus_A2_v1_rr1.wav",
+      "Sum_SHTrumpet_sus_A2_v3_rr1.wav"
+    ],
+    "A4": [
+      "Sum_SHTrumpet_sus_A4_v1_rr1.wav",
+      "Sum_SHTrumpet_sus_A4_v3_rr1.wav"
+    ],
+    "C3": [
+      "Sum_SHTrumpet_sus_C3_v1_rr1.wav",
+      "Sum_SHTrumpet_sus_C3_v3_rr1.wav"
+    ],
+    "C5": [
+      "Sum_SHTrumpet_sus_C5_v1_rr1.wav",
+      "Sum_SHTrumpet_sus_C5_v3_rr1.wav"
+    ],
+    "D#3": [
+      "Sum_SHTrumpet_sus_D%233_v1_rr1.wav",
+      "Sum_SHTrumpet_sus_D%233_v3_rr1.wav"
+    ],
+    "D4": [
+      "Sum_SHTrumpet_sus_D4_v1_rr1.wav",
+      "Sum_SHTrumpet_sus_D4_v3_rr1.wav"
+    ],
+    "F2": [
+      "Sum_SHTrumpet_sus_F2_v1_rr1.wav",
+      "Sum_SHTrumpet_sus_F2_v3_rr1.wav"
+    ],
+    "F4": [
+      "Sum_SHTrumpet_sus_F4_v1_rr1.wav",
+      "Sum_SHTrumpet_sus_F4_v3_rr1.wav"
+    ],
+    "G3": [
+      "Sum_SHTrumpet_sus_G3_v1_rr1.wav",
+      "Sum_SHTrumpet_sus_G3_v3_rr1.wav"
+    ]
+  }
+}

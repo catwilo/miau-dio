@@ -526,21 +526,32 @@ def _fmt_mb(value, is_bytes=False) -> str:
 def cmd_sample_list(a):
     """List every pack in the catalog (available to install)."""
     packs = _scatalog.all_packs()
+    vset = set(_samples.vendored())
+    cset = set(_samples.installed())
     if a.json:
         print(_json.dumps(
             [{"name": p.name, "description": p.description,
               "license": p.license, "approx_mb": p.approx_mb,
               "tags": list(p.tags),
-              "installed": _samples.is_installed(p.name)}
+              "installed": p.name in cset,
+              "vendored": p.name in vset,
+              "available": (p.name in cset) or (p.name in vset)}
              for p in packs], ensure_ascii=False))
         return
     for p in packs:
-        mark = "*" if _samples.is_installed(p.name) else " "
+        if p.name in vset:
+            mark = "v"
+        elif p.name in cset:
+            mark = "*"
+        else:
+            mark = " "
         print(f"{mark} {p.name:<10} ~{p.approx_mb:>4.1f} MB  "
               f"{', '.join(p.tags) or '-'}")
         print(f"    {p.description}")
     print()
-    print("(*) already installed. Install with: miau-dio sample install <name>")
+    print("(v) vendored with the repo -- offline, no install needed.")
+    print("(*) installed in the local cache.")
+    print("Optional packs: miau-dio sample install <name>")
 
 
 def cmd_sample_info(a):
@@ -548,6 +559,7 @@ def cmd_sample_info(a):
         pack = _scatalog.get(a.name)
     except KeyError as e:
         raise SystemExit(str(e))
+    vendored = pack.name in set(_samples.vendored())
     installed = _samples.is_installed(pack.name)
     print(f"name:        {pack.name}")
     print(f"description: {pack.description}")
@@ -555,28 +567,39 @@ def cmd_sample_info(a):
     print(f"approx size: ~{pack.approx_mb:.1f} MB")
     print(f"tags:        {', '.join(pack.tags) or '-'}")
     print(f"manifest:    {pack.manifest_url}")
+    print(f"vendored:    {'yes' if vendored else 'no'}")
     print(f"installed:   {'yes' if installed else 'no'}")
-    if installed:
+    if vendored or installed:
         print(f"on disk:     "
               f"{_fmt_mb(_samples.size_on_disk(pack.name), is_bytes=True)}")
 
 
 def cmd_sample_installed(a):
-    names = _samples.installed()
+    cached = _samples.installed()
+    vset = set(_samples.vendored())
     if a.json:
         print(_json.dumps(
-            [{"name": n, "size_bytes": _samples.size_on_disk(n),
+            [{"name": n, "source": "cache",
+              "size_bytes": _samples.size_on_disk(n),
               "size_mb": round(_samples.size_on_disk(n) / 1024 / 1024, 2)}
-             for n in names], ensure_ascii=False))
+             for n in cached] +
+            [{"name": n, "source": "vendored",
+              "size_bytes": _samples.size_on_disk(n),
+              "size_mb": round(_samples.size_on_disk(n) / 1024 / 1024, 2)}
+             for n in sorted(vset)], ensure_ascii=False))
         return
-    if not names:
-        print("no packs installed")
+    if not cached and not vset:
+        print("no packs available")
         return
     total = 0
-    for n in names:
+    for n in cached:
         b = _samples.size_on_disk(n)
         total += b
-        print(f"{n:<12} {_fmt_mb(b, is_bytes=True)}")
+        print(f"{n:<12} {_fmt_mb(b, is_bytes=True)}  (cache)")
+    for n in sorted(vset):
+        b = _samples.size_on_disk(n)
+        total += b
+        print(f"{n:<12} {_fmt_mb(b, is_bytes=True)}  (vendored)")
     print(f"{'(total)':<12} {_fmt_mb(total, is_bytes=True)}")
 
 
@@ -589,6 +612,9 @@ def cmd_sample_install(a):
             _scatalog.get(name)
         except KeyError as e:
             raise SystemExit(str(e))
+        if name in set(_samples.vendored()):
+            print(f"[skip] {name}: vendored with the repo, no install needed")
+            continue
         if _samples.is_installed(name):
             print(f"[skip] {name}: already installed")
             continue
@@ -624,6 +650,8 @@ def cmd_sample_preview(a):
 
     if _samples.is_installed(a.name):
         source = "local cache"
+    elif a.name in set(_samples.vendored()):
+        source = "vendored (shipped with the repo, offline)"
     else:
         source = "network (fetched on the fly)"
 

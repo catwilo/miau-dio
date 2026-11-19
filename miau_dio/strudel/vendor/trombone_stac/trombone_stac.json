@@ -1,0 +1,75 @@
+{
+  "_base": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Brass/Tenor%20Trombone/stac/",
+  "trombone_stac": {
+    "A#0": [
+      "tenortbn_stac_A%230_v1_rr1.wav",
+      "tenortbn_stac_A%230_v1_rr2.wav",
+      "tenortbn_stac_A%230_v2_rr1.wav",
+      "tenortbn_stac_A%230_v2_rr2.wav",
+      "tenortbn_stac_A%230_v3_rr1.wav",
+      "tenortbn_stac_A%230_v3_rr2.wav",
+      "tenortbn_stac_A%230_v4_rr1.wav",
+      "tenortbn_stac_A%230_v4_rr2.wav"
+    ],
+    "A#1": [
+      "tenortbn_stac_A%231_v1_rr1.wav",
+      "tenortbn_stac_A%231_v1_rr2.wav",
+      "tenortbn_stac_A%231_v2_rr1.wav",
+      "tenortbn_stac_A%231_v2_rr2.wav",
+      "tenortbn_stac_A%231_v3_rr1.wav",
+      "tenortbn_stac_A%231_v3_rr2.wav",
+      "tenortbn_stac_A%231_v4_rr1.wav",
+      "tenortbn_stac_A%231_v4_rr2.wav"
+    ],
+    "A#2": [
+      "tenortbn_stac_A%232_v1_rr1.wav",
+      "tenortbn_stac_A%232_v1_rr2.wav",
+      "tenortbn_stac_A%232_v2_rr1.wav",
+      "tenortbn_stac_A%232_v2_rr2.wav",
+      "tenortbn_stac_A%232_v3_rr1.wav",
+      "tenortbn_stac_A%232_v3_rr2.wav",
+      "tenortbn_stac_A%232_v4_r2.wav",
+      "tenortbn_stac_A%232_v4_rr1.wav"
+    ],
+    "D3": [
+      "tenortbn_stac_D3_v1_rr1.wav",
+      "tenortbn_stac_D3_v1_rr2.wav",
+      "tenortbn_stac_D3_v2_rr1.wav",
+      "tenortbn_stac_D3_v2_rr2.wav",
+      "tenortbn_stac_D3_v3_rr1.wav",
+      "tenortbn_stac_D3_v3_rr2.wav",
+      "tenortbn_stac_D3_v4_rr1.wav",
+      "tenortbn_stac_D3_v4_rr2.wav"
+    ],
+    "F1": [
+      "tenortbn_stac_F1_v1_rr1.wav",
+      "tenortbn_stac_F1_v1_rr2.wav",
+      "tenortbn_stac_F1_v2_rr1.wav",
+      "tenortbn_stac_F1_v2_rr2.wav",
+      "tenortbn_stac_F1_v3_rr1.wav",
+      "tenortbn_stac_F1_v3_rr2.wav",
+      "tenortbn_stac_F1_v4_rr1.wav",
+      "tenortbn_stac_F1_v4_rr2.wav"
+    ],
+    "F2": [
+      "tenortbn_stac_F2_v1_rr1.wav",
+      "tenortbn_stac_F2_v1_rr2.wav",
+      "tenortbn_stac_F2_v2_rr1.wav",
+      "tenortbn_stac_F2_v2_rr2.wav",
+      "tenortbn_stac_F2_v3_rr1.wav",
+      "tenortbn_stac_F2_v3_rr2.wav",
+      "tenortbn_stac_F2_v4_rr1.wav",
+      "tenortbn_stac_F2_v4_rr2.wav"
+    ],
+    "F3": [
+      "tenortbn_stac_F3_v1_rr1.wav",
+      "tenortbn_stac_F3_v1_rr2.wav",
+      "tenortbn_stac_F3_v2_rr1.wav",
+      "tenortbn_stac_F3_v2_rr2.wav",
+      "tenortbn_stac_F3_v3_rr1.wav",
+      "tenortbn_stac_F3_v3_rr2.wav",
+      "tenortbn_stac_F3_v4_rr1.wav",
+      "tenortbn_stac_F3_v4_rr2.wav"
+    ]
+  }
+}

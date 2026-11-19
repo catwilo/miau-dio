@@ -9,3 +9,6 @@ dist/
 _build_tmp/
 
 *.bak
+
+# shipped audio under vendor/ must be tracked
+!miau_dio/strudel/vendor/**

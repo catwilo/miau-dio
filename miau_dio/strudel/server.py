@@ -57,6 +57,23 @@ SHIM_HOSTS = (
     "shabda.ndre.gr",
 )
 
+# URLs under these prefixes fall back to vendor/<pack>/<rest>
+# when the XDG cache misses.
+VENDOR_MAP = {
+    "raw.githubusercontent.com/tidalcycles/uzu-drumkit/main/": "uzu/",
+    "raw.githubusercontent.com/tidalcycles/Dirt-Samples/master/": "dirt/",
+    "raw.githubusercontent.com/nbrosowsky/tonejs-instruments/master/"
+    "samples/guitar-acoustic/": "guitar/",
+    "raw.githubusercontent.com/sgossner/VSCO-2-CE/master/"
+    "Brass/Trumpet/sus/": "trumpet/",
+    "raw.githubusercontent.com/sgossner/VSCO-2-CE/master/"
+    "Brass/Trumpet/stac/": "trumpet_stac/",
+    "raw.githubusercontent.com/sgossner/VSCO-2-CE/master/"
+    "Brass/Tenor%20Trombone/sus/": "trombone/",
+    "raw.githubusercontent.com/sgossner/VSCO-2-CE/master/"
+    "Brass/Tenor%20Trombone/stac/": "trombone_stac/",
+}
+
 # Hard cap on pattern files. Keeps the local server safe against a runaway
 # client sending an unbounded body; patterns are a few KB at most.
 MAX_PATTERN_BYTES = 1024 * 1024
@@ -142,6 +159,22 @@ def cache_dir() -> pathlib.Path:
     d = _xdg_root() / "cache"
     d.mkdir(parents=True, exist_ok=True)
     return d
+
+def _vendor_root() -> pathlib.Path:
+    return _HERE / "vendor"
+
+
+def _resolve_vendor(rel: str):
+    """Return the vendored file for a /shim rel path, or None."""
+    if ".." in rel or rel.startswith("/") or "\\" in rel:
+        return None
+    for prefix, pack in VENDOR_MAP.items():
+        if rel.startswith(prefix):
+            rest = rel[len(prefix):]
+            target = _vendor_root() / pack / rest
+            if target.is_file():
+                return target
+    return None
 
 
 def _log_path():
@@ -340,7 +373,14 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             if target is None:
                 self._send(400, "text/plain", b"bad path")
                 return
-            self._serve_file(target)
+            if target.is_file():
+                self._serve_file(target)
+                return
+            vendored_target = _resolve_vendor(rel)
+            if vendored_target is not None:
+                self._serve_file(vendored_target)
+                return
+            self._send(404, "text/plain", b"not found", str(target))
             return
 
         # Fall through to the vendored site (/_astro/*, /fonts/*, etc.).
@@ -470,6 +510,7 @@ def serve_background(port: int = 0, host: str = "127.0.0.1",
 __all__ = [
     "MAX_PATTERN_BYTES",
     "SHIM_HOSTS",
+    "VENDOR_MAP",
     "StrudelError",
     "cache_dir",
     "samples_dir",

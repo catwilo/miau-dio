@@ -1,0 +1,93 @@
+{
+  "_base": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Brass/Trumpet/stac/",
+  "trumpet_stac": {
+    "A#3": [
+      "Sum_SHTrumpet_stac_A%233_v1_rr1.wav",
+      "Sum_SHTrumpet_stac_A%233_v1_rr2.wav",
+      "Sum_SHTrumpet_stac_A%233_v2_rr1.wav",
+      "Sum_SHTrumpet_stac_A%233_v2_rr2.wav",
+      "Sum_SHTrumpet_stac_A%233_v3_rr1.wav",
+      "Sum_SHTrumpet_stac_A%233_v3_rr2.wav"
+    ],
+    "A2": [
+      "Sum_SHTrumpet_stac_A2_v1_rr1.wav",
+      "Sum_SHTrumpet_stac_A2_v1_rr2.wav",
+      "Sum_SHTrumpet_stac_A2_v2_rr1.wav",
+      "Sum_SHTrumpet_stac_A2_v2_rr2.wav",
+      "Sum_SHTrumpet_stac_A2_v3_rr1.wav",
+      "Sum_SHTrumpet_stac_A2_v3_rr2.wav"
+    ],
+    "A4": [
+      "Sum_SHTrumpet_stac_A4_v1_rr1.wav",
+      "Sum_SHTrumpet_stac_A4_v1_rr2.wav",
+      "Sum_SHTrumpet_stac_A4_v2_rr1.wav",
+      "Sum_SHTrumpet_stac_A4_v2_rr2.wav",
+      "Sum_SHTrumpet_stac_A4_v3_rr1.wav",
+      "Sum_SHTrumpet_stac_A4_v3_rr2.wav"
+    ],
+    "C3": [
+      "Sum_SHTrumpet_stac_C3_v1_rr1.wav",
+      "Sum_SHTrumpet_stac_C3_v1_rr2.wav",
+      "Sum_SHTrumpet_stac_C3_v2_rr1.wav",
+      "Sum_SHTrumpet_stac_C3_v2_rr2.wav",
+      "Sum_SHTrumpet_stac_C3_v3_rr1.wav",
+      "Sum_SHTrumpet_stac_C3_v3_rr2.wav"
+    ],
+    "C5": [
+      "Sum_SHTrumpet_stac_C5_v1_rr1.wav",
+      "Sum_SHTrumpet_stac_C5_v1_rr2.wav",
+      "Sum_SHTrumpet_stac_C5_v2_rr1.wav",
+      "Sum_SHTrumpet_stac_C5_v2_rr2.wav",
+      "Sum_SHTrumpet_stac_C5_v3_rr1.wav",
+      "Sum_SHTrumpet_stac_C5_v3_rr2.wav"
+    ],
+    "D#3": [
+      "Sum_SHTrumpet_stac_D%233_v1_rr1.wav",
+      "Sum_SHTrumpet_stac_D%233_v1_rr2.wav",
+      "Sum_SHTrumpet_stac_D%233_v2_rr1.wav",
+      "Sum_SHTrumpet_stac_D%233_v2_rr2.wav",
+      "Sum_SHTrumpet_stac_D%233_v3_rr1.wav",
+      "Sum_SHTrumpet_stac_D%233_v3_rr2.wav"
+    ],
+    "D4": [
+      "Sum_SHTrumpet_stac_D4_v1_rr1.wav",
+      "Sum_SHTrumpet_stac_D4_v1_rr2.wav",
+      "Sum_SHTrumpet_stac_D4_v2_rr1.wav",
+      "Sum_SHTrumpet_stac_D4_v2_rr2.wav",
+      "Sum_SHTrumpet_stac_D4_v3_rr1.wav",
+      "Sum_SHTrumpet_stac_D4_v3_rr2.wav"
+    ],
+    "F2": [
+      "Sum_SHTrumpet_stac_F2_v1_rr1.wav",
+      "Sum_SHTrumpet_stac_F2_v1_rr2.wav",
+      "Sum_SHTrumpet_stac_F2_v2_rr1.wav",
+      "Sum_SHTrumpet_stac_F2_v2_rr2.wav",
+      "Sum_SHTrumpet_stac_F2_v3_rr1.wav",
+      "Sum_SHTrumpet_stac_F2_v3_rr2.wav"
+    ],
+    "F3": [
+      "Sum_SHTrumpet_stac_F3_v1_rr1.wav",
+      "Sum_SHTrumpet_stac_F3_v1_rr2.wav",
+      "Sum_SHTrumpet_stac_F3_v2_rr1.wav",
+      "Sum_SHTrumpet_stac_F3_v2_rr2.wav",
+      "Sum_SHTrumpet_stac_F3_v3_rr1.wav",
+      "Sum_SHTrumpet_stac_F3_v3_rr2.wav"
+    ],
+    "F4": [
+      "Sum_SHTrumpet_stac_F4_v1_rr1.wav",
+      "Sum_SHTrumpet_stac_F4_v1_rr2.wav",
+      "Sum_SHTrumpet_stac_F4_v2_rr1.wav",
+      "Sum_SHTrumpet_stac_F4_v2_rr2.wav",
+      "Sum_SHTrumpet_stac_F4_v3_rr1.wav",
+      "Sum_SHTrumpet_stac_F4_v3_rr2.wav"
+    ],
+    "G3": [
+      "Sum_SHTrumpet_stac_G3_v1_rr1.wav",
+      "Sum_SHTrumpet_stac_G3_v1_rr2.wav",
+      "Sum_SHTrumpet_stac_G3_v2_rr1.wav",
+      "Sum_SHTrumpet_stac_G3_v2_rr2.wav",
+      "Sum_SHTrumpet_stac_G3_v3_rr1.wav",
+      "Sum_SHTrumpet_stac_G3_v3_rr2.wav"
+    ]
+  }
+}

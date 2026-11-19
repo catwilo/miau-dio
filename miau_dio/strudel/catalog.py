@@ -83,6 +83,76 @@ CATALOG: dict[str, Pack] = {
         approx_mb=0.2,
         tags=("drums", "world"),
     ),
+    "guitar": Pack(
+        name="guitar",
+        description=(
+            "Acoustic guitar multisample from Iowa, via "
+            "nbrosowsky/tonejs-instruments."
+        ),
+        license="CC-BY-3.0",
+        manifest_url=(
+            "https://raw.githubusercontent.com/nbrosowsky/"
+            "tonejs-instruments/master/samples/guitar-acoustic/guitar.json"
+        ),
+        approx_mb=24.3,
+        tags=("strings", "guitar", "acoustic"),
+    ),
+    "trumpet": Pack(
+        name="trumpet",
+        description=(
+            "Trumpet, sustained, multi-velocity, multi-round-robin. "
+            "VSCO 2 Community Edition."
+        ),
+        license="CC0-1.0",
+        manifest_url=(
+            "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/"
+            "master/Brass/Trumpet/sus/"
+        ),
+        approx_mb=38.7,
+        tags=("brass", "trumpet", "wind"),
+    ),
+    "trumpet_stac": Pack(
+        name="trumpet_stac",
+        description=(
+            "Trumpet, staccato, multi-velocity, multi-round-robin. "
+            "VSCO 2 Community Edition."
+        ),
+        license="CC0-1.0",
+        manifest_url=(
+            "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/"
+            "master/Brass/Trumpet/stac/"
+        ),
+        approx_mb=14.0,
+        tags=("brass", "trumpet", "staccato"),
+    ),
+    "trombone": Pack(
+        name="trombone",
+        description=(
+            "Tenor trombone, sustained, multi-velocity. "
+            "VSCO 2 Community Edition."
+        ),
+        license="CC0-1.0",
+        manifest_url=(
+            "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/"
+            "master/Brass/Tenor%20Trombone/sus/"
+        ),
+        approx_mb=57.4,
+        tags=("brass", "trombone", "wind"),
+    ),
+    "trombone_stac": Pack(
+        name="trombone_stac",
+        description=(
+            "Tenor trombone, staccato, multi-velocity, multi-round-robin. "
+            "VSCO 2 Community Edition."
+        ),
+        license="CC0-1.0",
+        manifest_url=(
+            "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/"
+            "master/Brass/Tenor%20Trombone/stac/"
+        ),
+        approx_mb=12.8,
+        tags=("brass", "trombone", "staccato"),
+    ),
 }
 
 

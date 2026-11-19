@@ -1,0 +1,58 @@
+{
+  "_base": "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Brass/Tenor%20Trombone/sus/",
+  "trombone": {
+    "A#0": [
+      "tenortbn_sus_A%230_v1_1.wav",
+      "tenortbn_sus_A%230_v2_1.wav"
+    ],
+    "A#1": [
+      "tenortbn_sus_A%231_v1_1.wav",
+      "tenortbn_sus_A%231_v2_1.wav",
+      "tenortbn_sus_A%231_v3_1.wav"
+    ],
+    "C#1": [
+      "tenortbn_sus_C%231_v1_1.wav",
+      "tenortbn_sus_C%231_v2_1.wav"
+    ],
+    "C#3": [
+      "tenortbn_sus_C%233_v1_1.wav",
+      "tenortbn_sus_C%233_v2_1.wav",
+      "tenortbn_sus_C%233_v3_1.wav"
+    ],
+    "C3": [
+      "tenortbn_sus_C3_v1_1.wav",
+      "tenortbn_sus_C3_v2_1.wav",
+      "tenortbn_sus_C3_v3_1.wav"
+    ],
+    "D#1": [
+      "tenortbn_sus_D%231_v1_1.wav",
+      "tenortbn_sus_D%231_v2_1.wav",
+      "tenortbn_sus_D%231_v3_1.wav"
+    ],
+    "D#3": [
+      "tenortbn_sus_D%233_v1_1.wav",
+      "tenortbn_sus_D%233_v2_1.wav",
+      "tenortbn_sus_D%233_v3_1.wav"
+    ],
+    "D2": [
+      "tenortbn_sus_D2_v1_1.wav",
+      "tenortbn_sus_D2_v2_1.wav",
+      "tenortbn_sus_D2_v3_1.wav"
+    ],
+    "F1": [
+      "tenortbn_sus_F1_v1_1.wav",
+      "tenortbn_sus_F1_v2_1.wav",
+      "tenortbn_sus_F1_v3_1.wav"
+    ],
+    "F2": [
+      "tenortbn_sus_F2_v1_1.wav",
+      "tenortbn_sus_F2_v2_1.wav",
+      "tenortbn_sus_F2_v3_1.wav"
+    ],
+    "F3": [
+      "tenortbn_sus_F3_v1_1.wav",
+      "tenortbn_sus_F3_v2_1.wav",
+      "tenortbn_sus_F3_v3_1.wav"
+    ]
+  }
+}

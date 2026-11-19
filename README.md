@@ -1,324 +1,175 @@
 # miau-dio
 
-CLI para prototipar, organizar y generar música desde la consola.
-Se apoya en motores que ya existen (abc2midi, timidity, FluidSynth,
-Strudel, FFmpeg, mpv) y aporta la capa que los coordina: ideas,
-instrumentos, proyectos y sesiones de live coding.
+CLI para componer musica desde la terminal. Ideas en ABC, proyectos multi-pista, REPL de Strudel para live coding. Sin dependencias de Python.
 
-Cero dependencias de Python (solo stdlib). Funciona en **Debian** y
-**Termux (Android)** sin root.
-
----
-
-## Flujo de uso
-
-Tres modos conviven:
-
-- **Idea** — escribes notación ABC, la guardas con tags y notas, y la oyes
-  al instante: `abc → abc2midi → timidity|fluidsynth → wav → suena`.
-- **Proyecto** — una canción con varias pistas, metadata (tempo, compás,
-  tonalidad) y contenido desacoplado del motor. Puede vivir en el store
-  global (XDG) o como directorio autocontenido versionable con git.
-- **Live** — un REPL de Strudel servido localmente, sin depender de
-  internet en tiempo de ejecución, con catálogo de samples que se instala
-  a demanda.
-
----
-
-## Instalación
+## Instalacion
 
     git clone git@github.com:catwilo/miau-dio.git
     cd miau-dio
     ./install.sh
 
-`install.sh` enlaza el comando `miau-dio` (symlink, nunca copia: un
-`git pull` actualiza el binario sin reinstalar), compila `abc2midi` desde
-las fuentes incluidas y ofrece instalar los backends (`timidity`,
-`fluidsynth`, `sox`). No usa `pip`.
+## Inicio rapido
 
-Si el comando no aparece, añade `~/.local/bin` (o `$PREFIX/bin` en
-Termux) al PATH.
-
----
-
-## Inicio rápido
-
-    miau-dio idea new "mi primera idea"   # editor → guardas → suena
-    miau-dio idea list                    # ves tus ideas
-    miau-dio backend selftest             # verifica que todo va
-    miau-dio live                         # REPL de Strudel local
-    miau-dio sample list                  # qué packs de samples hay
-    miau-dio sample install uzu           # baja un pack al disco
-
----
+    miau-dio idea new "mi primera idea"   # editor -> guardas -> suena
+    miau-dio idea list                    # tus ideas
+    miau-dio backend selftest             # verifica audio
+    miau-dio live                         # REPL de Strudel en el navegador
+    miau-dio sample list                  # packs de samples
 
 ## Comandos
 
-La CLI tiene una jerarquía de grupos. Todos los grupos tienen `--help`.
+### idea
 
-### idea — piezas musicales en ABC
-
-- `idea new <nombre>` — plantilla en editor, al guardar la convierte en
-  idea y suena. Acepta `--key`, `--meter`, `--unit`, `--bpm`, `-t/--tag`,
-  `-n/--note`, `--silent`.
-- `idea add <nombre> <archivo.abc>` — guarda un `.abc` existente.
-- `idea list [--tag X] [-s QUERY] [--json]` — lista / filtra / busca.
-- `idea show <id>` — detalle completo.
-- `idea edit <id>` — abre el `.abc` en `$EDITOR`. Si hubo
-  cambios, limpia la caché de audio.
-- `idea rename <id> <nuevo>` / `idea dup <id> [--name]` — el id es estable
-  y no cambia.
+- `idea new <nombre>` -- plantilla en editor, al guardar suena. Flags: `--key --meter --unit --bpm -t/--tag -n/--note --silent`.
+- `idea add <nombre> <archivo.abc>` -- guarda un `.abc` existente.
+- `idea list [--tag X] [-s QUERY] [--json]` -- lista / filtra / busca.
+- `idea show <id>` -- detalle.
+- `idea edit <id>` -- abre en `$EDITOR`. Limpia cache de audio al cambiar.
+- `idea rename <id> <nuevo>` / `idea dup <id> [--name]` -- el id es estable.
 - `idea tag <id> --add X --rm Y` / `idea note <id> "texto"`.
-- `idea assign <id> --program N [--at K]` — escribe un `%%MIDI program` en
-  el `.abc` (fijo, o antes de la nota K).
+- `idea assign <id> --program N [--at K]` -- `%%MIDI program` fijo o antes de nota K.
 - `idea rm <id> [-y]`.
 
-### instr — biblioteca de instrumentos
+### instr
 
 - `instr add <nombre> <program 0-127> [--family X]`
 - `instr list [--json]` / `instr show <nombre>`
 - `instr dup <nombre> [--name]` / `instr rename <viejo> <nuevo>`
 - `instr rm <nombre> [-y]`
-- `family list` — etiquetas de familia distintas en uso.
+- `family list`
 
-### play — render y reproducción
+### play
 
-- `play file <archivo.abc> [--out out.wav] [--sf soundfont.sf2]
-  [--engine timidity|fluidsynth]` — renderiza un `.abc` suelto.
-- `play idea <id> [--engine ...] [--sf ...] [--silent] [--random
-  [--seed N] [--min-duration F]]` — reproduce una idea guardada;
-  `--random` reasigna programas al azar desde la biblioteca.
+- `play file <archivo.abc> [--out out.wav] [--sf soundfont.sf2] [--engine timidity|fluidsynth]`
+- `play idea <id> [--engine ...] [--sf ...] [--silent] [--random [--seed N] [--min-duration F]]`
 
-### project — proyectos musicales
+### project
 
-- `project new <nombre> [--tempo N] [--meter N/M] [--key X]
-  [--track "name:type[:content]"]... [--at <ruta>]`
-  Sin `--at`, el proyecto se guarda en el store XDG. Con `--at`, se
-  materializa un directorio autocontenido con `project.json`,
-  `tracks/`, `patterns/`, `samples/`, `renders/`, `README.md` y
-  `.gitignore`, listo para versionarse con git.
-- `project list [--json]` / `project show <id> [--at <ruta>]` /
-  `project rm <id> [-y]`.
+- `project new <nombre> [--tempo N] [--meter N/M] [--key X] [--track "name:type[:content]"]... [--at <ruta>]`
+- `project list [--json]` / `project show <id> [--at <ruta>]` / `project rm <id> [-y]`
 
-### live — REPL de Strudel local
+Con `--at`, el proyecto se materializa como directorio versionable con `project.json`, `tracks/`, `patterns/`, `samples/`, `renders/`, `README.md`, `.gitignore`.
 
-- `live [--url URL] [--host ADDR] [--port N] [--at <ruta>]` — arranca un
-  servidor HTTP local que sirve el **REPL oficial de Strudel**
-  vendorizado en el repo, abre el navegador y bloquea hasta Ctrl+C.
-  Todo el motor corre en el navegador (Web Audio), el servidor solo
-  reparte archivos. Sin `--url`, la sesión es offline: las peticiones a
-  hosts remotos (samples, hydra) se reescriben a `/shim/<host>/<path>` y
-  se resuelven desde el cache local en
-  `XDG_DATA_HOME/miau-dio/strudel/cache/`.
+### live
 
-  **Defaults**: `--host 0.0.0.0` (acepta conexiones de Tailscale y LAN)
-  y `--port 8765`. Al arrancar imprime las URLs de red detectadas, así
-  que desde otro dispositivo de la tailnet basta abrir
-  `http://<tailscale-ip>:8765/`. Para uso estrictamente local, pasá
-  `--host 127.0.0.1`. Con `--port 0` el SO elige un puerto libre.
+- `live [--url URL] [--host ADDR] [--port N] [--at <ruta>]`
 
-  **`--at <ruta>`**: ata un proyecto musical (directorio con
-  `project.json`) al REPL. La página gana un footer con save/load de
-  patterns y muestra el nombre del proyecto. Sin `--at`, el REPL
-  funciona igual pero sin las funciones de proyecto.
+Arranca el REPL de Strudel vendorizado en el repo y lo abre en el navegador. Defaults: `--host 0.0.0.0 --port 8765`. Con `--host 127.0.0.1` queda solo local; con `--port 0` el SO elige puerto libre.
 
-### sample — gestión del catálogo de samples
+Sin `--url`, todo es offline: cada peticion a un host remoto conocido (`raw.githubusercontent.com`, `cdn.jsdelivr.net`, etc.) se reescribe a `/shim/<host>/<path>` y el servidor la resuelve desde `miau_dio/strudel/vendor/` o el cache XDG. Nunca sale a internet.
 
-- `sample list [--json]` — packs disponibles en el catálogo.
-- `sample info <nombre>` — descripción, licencia, tamaño aproximado,
-  URL del manifest.
-- `sample installed [--json]` — qué hay en disco y cuánto ocupa.
-- `sample install <nombre>...` — descarga un pack al cache local
-  (`XDG_DATA_HOME/miau-dio/strudel/cache/<host>/<path>`), con todos sus
-  archivos y su manifest.
-- `sample remove <nombre>... [-y]` — borra un pack del cache.
+Con `--at`, ata un proyecto al REPL: footer con save/load de patterns.
 
-Los packs se guardan **fuera del repositorio**, en el directorio XDG del
-usuario. El repo solo contiene el catálogo (metadata, unos pocos KB).
+### sample
 
-### config — defaults persistentes para `idea new`
+- `sample list [--json]` -- packs del catalogo.
+- `sample info <nombre>` -- descripcion, tamano, manifest.
+- `sample installed [--json]` -- que hay en disco.
+- `sample install <nombre>...` -- baja un pack al cache XDG.
+- `sample remove <nombre>... [-y]` -- borra del cache.
 
-- `config show` — valores actuales.
-- `config set <campo> <valor>` — `key`, `meter`, `unit` o `bpm`.
+### config
 
-Precedencia: flag > config guardada > fábrica (`C`, `4/4`, `1/8`, `120`).
+- `config show` / `config set <campo> <valor>` -- `key`, `meter`, `unit`, `bpm`.
 
-### backend — dependencias externas
+### backend
 
-- `backend setup --profile <minimal|playback|full>` — instala el set.
-- `backend status` — qué binarios hay.
-- `backend selftest [--full]` — autoverificación (con audio en `--full`).
+- `backend setup --profile <minimal|playback|full>`
+- `backend status`
+- `backend selftest [--full]`
 
----
+## Samples en el REPL
 
-## Notación ABC (lo mínimo)
+Los packs en `miau_dio/strudel/vendor/` ya estan en disco y se sirven sin instalar nada. `sample list` los marca con `v`.
+
+| pack | contenido |
+|---|---|
+| `uzu` | bateria (kick, snare, hats, claps, breaks) |
+| `dirt` | percusion y texturas |
+| `guitar` | guitarra acustica, cromatica A2-G#4 (37 notas) |
+| `trumpet` | trompeta sostenida, multi-velocidad y round-robin |
+| `trumpet_stac` | trompeta staccato, multi-velocidad y round-robin |
+| `trombone` | trombon tenor sostenido, multi-velocidad |
+| `trombone_stac` | trombon tenor staccato, multi-velocidad y round-robin |
+
+Packs opcionales (se bajan con `sample install`): `piano` (8.7 MB), `mridangam` (0.2 MB).
+
+### Claves / notas exactas
+
+- `uzu`: `bd`, `brk`, `cb`, `cp`, `cr`, `hh`, `ht`, `lt`, `misc`, `mt`, `oh`, `rd`, `rim`, `sd`, `sh`, `tb`
+- `dirt`: `casio`, `crow`, `east`, `insect`, `jazz`, `metal`, `numbers`, `space`, `wind`
+- `guitar`: `A#2` `A#3` `A#4` `A2` `A3` `A4` `B2` `B3` `B4` `C#3` `C#4` `C#5` `C3` `C4` `C5` `D#2` `D#3` `D#4` `D2` `D3` `D4` `D5` `E2` `E3` `E4` `F#2` `F#3` `F#4` `F2` `F3` `F4` `G#2` `G#3` `G#4` `G2` `G3` `G4`
+- `trumpet`: `A#3` `A2` `A4` `C3` `C5` `D#3` `D4` `F2` `F4` `G3`
+- `trumpet_stac`: `A#3` `A2` `A4` `C3` `C5` `D#3` `D4` `F2` `F3` `F4` `G3`
+- `trombone`: `A#0` `A#1` `C#1` `C#3` `C3` `D#1` `D#3` `D2` `F1` `F2` `F3`
+- `trombone_stac`: `A#0` `A#1` `A#2` `D3` `F1` `F2` `F3`
+
+### Como cargarlos en el REPL de Strudel
+
+En `miau-dio live`, pega esto en el editor:
+
+    // drums: s("nombre")
+    samples('https://raw.githubusercontent.com/tidalcycles/uzu-drumkit/main/strudel.json')
+    s("bd sd hh hh")
+
+    // percusion y texturas de dirt: s("nombre")
+    samples('https://raw.githubusercontent.com/tidalcycles/Dirt-Samples/master/Dirt-Samples.json')
+    s("casio crow wind")
+
+    // guitarra: pitched, note("...").sound("guitar")
+    samples('https://raw.githubusercontent.com/nbrosowsky/tonejs-instruments/master/samples/guitar-acoustic/guitar.json')
+    note("C4 E4 G4 C5").sound("guitar")
+
+    // trompeta sostenida: note("...").sound("trumpet")
+    samples('https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Brass/Trumpet/sus/trumpet.json')
+    note("C4 E4 G4").sound("trumpet")
+
+    // trompeta staccato: note("...").sound("trumpet_stac")
+    samples('https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Brass/Trumpet/stac/trumpet_stac.json')
+    note("C4 E4 G4").sound("trumpet_stac")
+
+    // trombon tenor sostenido: note("...").sound("trombone")
+    samples('https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Brass/Tenor%20Trombone/sus/trombone.json')
+    note("C2 E2 G2").sound("trombone")
+
+    // trombon tenor staccato: note("...").sound("trombone_stac")
+    samples('https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/Brass/Tenor%20Trombone/stac/trombone_stac.json')
+    note("C2 E2 G2").sound("trombone_stac")
+
+El servidor reescribe esas URLs al vendor local; el REPL no toca internet.
+
+## Notacion ABC (subset aceptado)
 
     X:1
-    T:título
-    M:4/4          compás
-    L:1/8          duración por defecto de cada nota
-    Q:1/4=120      tempo (BPM)
-    K:C            tonalidad
-    C E G c|       las notas
+    T:titulo
+    M:4/4      compas
+    L:1/8      duracion por defecto
+    Q:1/4=120  tempo
+    K:C        tonalidad
+    C E G c|   notas
 
-- Notas: `A B C D E F G` (mayúscula = octava base, minúscula = una arriba).
-- Duración: número tras la nota la alarga → `C4` dura 4.
-- Acorde Cmaj7 arpegiado: `C E G B|`.
-- Silencio: `z` — Barra de compás: `|`.
+- Mayuscula = octava base, minuscula = una arriba.
+- `C4` dura 4 unidades de `L`.
+- `z` silencio, `|` barra.
+- Rechazado: acordes `[CEG]`, ligaduras `-`, repeticiones `|:`, voces `V:`.
 
-El parser solo acepta el subset listado arriba; todo lo demás (corchetes
-de acorde `[CEG]`, ligaduras `-`, repeticiones `|:`, voces `V:`) se
-rechaza con un mensaje claro.
-
----
-
-## Dónde se guarda
-
-**Estado global** (store XDG, por usuario):
+## Donde se guarda
 
     ~/.local/share/miau-dio/
-    ├── abc/<id>.abc                  ideas
-    ├── audio/<id>.wav                caché de audio de ideas
-    ├── instruments/                  biblioteca de instrumentos
-    │   ├── index.json
-    │   └── <nombre>.json
-    ├── projects/                     proyectos (store XDG)
-    │   ├── index.json
-    │   └── <id>/project.json
-    ├── strudel/
-    │   ├── samples/                  wavs sueltos del usuario
-    │   └── cache/                    packs instalados
-    ├── index.json                    índice de ideas
-    └── config.json                   defaults de `idea new`
+    |-- abc/<id>.abc
+    |-- audio/<id>.wav
+    |-- instruments/
+    |-- projects/
+    |-- strudel/
+    |   |-- samples/        wavs sueltos del usuario
+    |   +-- cache/          packs opt-in instalados
+    |-- index.json
+    +-- config.json
 
-**Proyecto autocontenido** (con `--at <ruta>`):
+Vendor (en el repo): `miau_dio/strudel/vendor/<pack>/`.
 
-    <ruta>/
-    ├── project.json
-    ├── README.md
-    ├── .gitignore
-    ├── tracks/
-    ├── patterns/
-    ├── samples/
-    └── renders/
-
-Los renders y caches quedan fuera de git (por `.gitignore`).
-
-En todos los casos el `id` (8 hex derivado de `os.urandom`) es estable e
-independiente del nombre: renombrar nunca rompe artefactos.
-
----
-
-## Ejemplo completo
-
-    miau-dio config set key Am
-    miau-dio idea new "riff oscuro" -t bajo
-    miau-dio idea list --tag bajo
-    miau-dio idea duplicate a1b2c3d4 --name "riff oscuro v2"
-    miau-dio idea note a1b2c3d4 "subir tempo a 140"
-    miau-dio play idea a1b2c3d4 --engine fluidsynth
-
-    miau-dio project new "mi canción" --tempo 95 --meter 3/4 --key Am \
-      --track "bass:midi:C E G" --track "drum:pattern:bd sd" \
-      --at ~/musica/mi-cancion
-    cd ~/musica/mi-cancion && git init && git add . && git commit -m "inicio"
-
-    miau-dio sample list
-    miau-dio sample install uzu dirt
-    miau-dio live --port 8765
-
----
+Proyecto con `--at`: `project.json`, `README.md`, `.gitignore`, `tracks/`, `patterns/`, `samples/`, `renders/`.
 
 ## Arquitectura
 
-Ver [ARCHITECTURE.md](ARCHITECTURE.md): mapa de módulos, responsabilidades
-por archivo, invariantes y dónde buscar cuando algo falla.
-
----
-
-## Licencia
-
-AGPL-3.0 + CLA. Ver la sección de licenciamiento en el apéndice.
-
----
-
-## Apéndice: propuesta de proyecto — Territorios Sonoros
-
-Contenidos digitales de creación musical para la primera infancia,
-presentado a la convocatoria "Territorios de Arte, Juego y Vida".
-
-### La idea
-
-Territorios Sonoros es una colección de canciones creadas por niñas y
-niños de 3 a 6 años del municipio, hechas con los sonidos de su propio
-territorio.
-
-En encuentros en la biblioteca municipal, acompañados por sus familias,
-los niños componen eligiendo timbres, repitiendo patrones y decidiendo
-el orden de los sonidos. No necesitan saber leer: esas decisiones ya
-son música. El material con el que juegan incluye rondas y arrullos
-recuperados con los mayores del municipio, digitalizados y devueltos a
-los niños como sonidos vivos.
-
-Todo funciona en el celular que la familia ya tiene, sin conexión ni
-equipos adicionales. La inteligencia artificial que acompaña la
-creación corre dentro del propio dispositivo, de modo que los datos de
-los niños nunca salen de allí.
-
-### Qué queda al final
-
-| Entregable | Cantidad |
-|---|---|
-| Composiciones originales de primera infancia, catalogadas y publicadas | 120 obras |
-| Rondas y arrullos del patrimonio oral local, digitalizados | 20 piezas |
-| Guía pedagógica de creación sonora 3-6 años | 1 documento abierto |
-| Biblioteca de timbres del patrimonio sonoro del municipio | 1 acervo |
-| Familias participantes | 60 núcleos |
-| Encuentros en la biblioteca municipal | 24 sesiones |
-
-### Fases
-
-1. **Recolección del patrimonio sonoro.** Grabación de rondas, arrullos
-   y cantos con los mayores del municipio. Construcción de la
-   biblioteca de timbres locales.
-2. **Adaptación del motor a primera infancia.** Interfaz de juego sin
-   texto: colores, figuras, metáforas. El niño no lee; toca.
-3. **Encuentros en la biblioteca.** Sesiones con familias. Creación
-   acompañada. Cada encuentro produce obras.
-4. **Catalogación y circulación.** Publicación del acervo, entrega de
-   la guía pedagógica, empaquetado para que otras bibliotecas puedan
-   replicarlo.
-
-### Equipo
-
-| Rol | Perfil |
-|---|---|
-| Dirección técnica | Desarrollo del motor, integración de IA local, empaquetado |
-| Dirección pedagógica | Profesional titulado en pedagogía infantil |
-| Acompañamiento terapéutico | Profesional titulado en musicoterapia |
-| Fundamentos musicales | Formación teórica avanzada, diseño del contenido musical |
-| Sede y convocatoria | Biblioteca municipal |
-
-### Protección de la infancia
-
-- Consentimiento informado escrito de padres o cuidadores, por
-  participante y por obra publicada.
-- Ningún dato personal de menores en servidores externos.
-- Acompañante familiar presente en cada sesión.
-- Profesionales titulados a cargo de los componentes pedagógico y
-  terapéutico.
-- Cumplimiento de la Ley 1581 de 2012 y de los lineamientos de
-  MinCulturas y MinEducación.
-
-### Licenciamiento
-
-La colección de canciones y la guía pedagógica quedan bajo licencia
-abierta, disponibles para cualquier biblioteca pública del país.
-
-El motor (este repositorio) es un desarrollo previo aportado al
-proyecto. Se distribuye bajo AGPL-3.0 más CLA (Contributor License
-Agreement), garantizando su uso libre y permanente para bibliotecas
-públicas, instituciones educativas y comunidades. Sus autores
-conservan la titularidad y los derechos de licenciamiento para usos
-comerciales, lo que asegura la sostenibilidad del proyecto más allá
-del periodo de financiación.
+Ver [ARCHITECTURE.md](ARCHITECTURE.md).

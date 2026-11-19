@@ -46,6 +46,20 @@ def _packs_dir() -> pathlib.Path:
     return d
 
 
+def _vendor_root() -> pathlib.Path:
+    """Directory holding sample packs shipped with the repo."""
+    return pathlib.Path(__file__).resolve().parent / "vendor"
+
+
+def vendored() -> list[str]:
+    """Names of packs bundled with the repo (never downloaded)."""
+    root = _vendor_root()
+    if not root.is_dir():
+        return []
+    return sorted(p.name for p in root.iterdir()
+                  if p.is_dir() and any(p.glob("*.json")))
+
+
 def _record_path(name: str) -> pathlib.Path:
     return _packs_dir() / f"{name}.json"
 
@@ -114,8 +128,16 @@ def installed() -> list[str]:
     return sorted(p.stem for p in _packs_dir().glob("*.json"))
 
 
+def available() -> list[str]:
+    """Packs playable offline: cached installs plus vendored packs."""
+    return sorted(set(installed()) | set(vendored()))
+
+
 def install(name: str, on_progress=None) -> list[pathlib.Path]:
     """Download a pack into the cache; return the list of local paths."""
+    if name in vendored():
+        raise SampleError(
+            f"pack is vendored (shipped with the repo): {name}")
     pack = catalog.get(name)
     if is_installed(name):
         raise SampleError(f"pack already installed: {name}")
@@ -143,6 +165,9 @@ def install(name: str, on_progress=None) -> list[pathlib.Path]:
 
 def remove(name: str) -> int:
     """Delete a pack's files. Returns the number of files removed."""
+    if name in vendored():
+        raise SampleError(
+            f"pack is vendored (shipped with the repo): {name}")
     if not is_installed(name):
         raise SampleError(f"pack not installed: {name}")
     record = json.loads(_record_path(name).read_text())
@@ -202,6 +227,12 @@ def preview(name: str, count: int = 0) -> list[tuple[str, pathlib.Path]]:
             if not local.is_file():
                 continue
             entries.append((path_in_repo, "", local))
+    elif name in vendored():
+        vroot = _vendor_root() / name
+        for p in sorted(vroot.rglob("*")):
+            if (p.is_file()
+                    and p.suffix.lower() in (".wav", ".mp3", ".ogg")):
+                entries.append((str(p.relative_to(vroot)), "", p))
     if not entries:
         body, urls = _collect_urls(pack)
         manifest = json.loads(body)
@@ -264,7 +295,13 @@ def preview_cleanup(items: list[tuple[str, pathlib.Path]]) -> None:
 
 def size_on_disk(name: str) -> int:
     """Total bytes currently used by an installed pack."""
-    if not is_installed(name):
+    if name in vendored():
+        total = 0
+        for p in (_vendor_root() / name).rglob("*"):
+            if p.is_file():
+                total += p.stat().st_size
+        return total
+    if not _record_path(name).is_file():
         return 0
     record = json.loads(_record_path(name).read_text())
     total = 0
@@ -276,6 +313,7 @@ def size_on_disk(name: str) -> int:
 
 
 __all__ = [
-    "SampleError", "cache_dir", "install", "installed",
-    "is_installed", "preview", "preview_cleanup", "remove", "size_on_disk",
+    "SampleError", "available", "cache_dir", "install", "installed",
+    "is_installed", "preview", "preview_cleanup", "remove",
+    "size_on_disk", "vendored",
 ]

@@ -66,8 +66,8 @@ CATALOG: dict[str, Pack] = {
         ),
         license="CC0-1.0 / various per sample",
         manifest_url=(
-            "https://raw.githubusercontent.com/felixroos/"
-            "dough-samples/main/Dirt-Samples.json"
+            "https://raw.githubusercontent.com/tidalcycles/"
+            "Dirt-Samples/master/Dirt-Samples.json"
         ),
         approx_mb=1.4,
         tags=("percussion", "textures"),

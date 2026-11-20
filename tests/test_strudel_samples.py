@@ -225,6 +225,28 @@ class TestRealVendorTree(unittest.TestCase):
         self.assertIn("uzu", samples.vendored())
         self.assertIn("dirt", samples.vendored())
 
+    def test_every_vendored_pack_has_url_in_vendor_map(self):
+        """A vendored pack whose manifest_url is not under any VENDOR_MAP
+        prefix would 404 in the shim and fail to preload in `live
+        --samples`. Guard against that drift."""
+        from miau_dio.strudel import server as srvmod
+        for name in samples.vendored():
+            pack = samples.catalog.get(name)
+            # VENDOR_MAP keys are scheme-less prefixes; strip the scheme
+            # from the manifest URL before comparing.
+            url = pack.manifest_url
+            for scheme in ("https://", "http://"):
+                if url.startswith(scheme):
+                    url = url[len(scheme):]
+                    break
+            matched = [prefix for prefix in srvmod.VENDOR_MAP
+                       if url.startswith(prefix)]
+            self.assertTrue(
+                matched,
+                f"pack {name!r} manifest_url not under VENDOR_MAP: "
+                f"{pack.manifest_url}",
+            )
+
     def test_uzu_manifest_present(self):
         root = samples._vendor_root() / "uzu"
         self.assertTrue((root / "strudel.json").is_file())

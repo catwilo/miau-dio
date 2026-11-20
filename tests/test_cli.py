@@ -14,6 +14,7 @@ import os
 import pathlib
 import tempfile
 import unittest
+from unittest import mock
 
 from miau_dio import cli
 from miau_dio.store import store
@@ -69,7 +70,7 @@ class TestParserShape(unittest.TestCase):
         self.assertEqual(
             set(subs.keys()),
             {"idea", "instr", "family", "play", "config", "backend",
-             "project", "live", "sample"},
+             "project", "live", "sample", "doctor"},
         )
 
     def test_idea_subcommands(self):
@@ -277,3 +278,68 @@ class TestBackend(_CliCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestDoctor(unittest.TestCase):
+    def _run_doctor(self, *, is_installed=True, vendored=None,
+                    packs_with_samples=None):
+        import pathlib
+        from miau_dio.platform import platform as _platform
+
+        if vendored is None:
+            vendored = ["testpack"]
+        if packs_with_samples is None:
+            packs_with_samples = {
+                "testpack": [("hit.wav", pathlib.Path("/tmp/fake-hit.wav"))],
+            }
+
+        def fake_render(abc, out="idea.wav", **kw):
+            pathlib.Path(out).write_bytes(b"RIFF")
+            return out
+
+        def fake_preview(name, count=0):
+            return packs_with_samples.get(name, [])
+
+        buf = io.StringIO()
+        with mock.patch.object(cli.pipeline, "render",
+                               side_effect=fake_render), \
+             mock.patch.object(cli._samples, "preview",
+                               side_effect=fake_preview), \
+             mock.patch.object(cli._samples, "preview_cleanup"), \
+             mock.patch.object(cli._samples, "vendored",
+                               return_value=vendored), \
+             mock.patch.object(_platform, "audio_player",
+                               return_value=["true"]), \
+             mock.patch("subprocess.run"), \
+             mock.patch.object(cli, "is_installed",
+                               return_value=is_installed):
+            with contextlib.redirect_stdout(buf):
+                try:
+                    cli.cmd_doctor(mock.MagicMock())
+                    err = None
+                except SystemExit as e:
+                    err = e
+        return buf.getvalue(), err
+
+    def test_all_ok(self):
+        out, err = self._run_doctor()
+        self.assertIsNone(err)
+        self.assertIn("all checks passed", out)
+        self.assertIn("[ok]   backends", out)
+        self.assertIn("[ok]   pipeline", out)
+        self.assertIn("[ok]   sample: testpack", out)
+
+    def test_missing_backend_fails(self):
+        out, err = self._run_doctor(is_installed=False)
+        self.assertIsNotNone(err)
+        self.assertEqual(err.code, 1)
+        self.assertIn("[FAIL] backends", out)
+        self.assertIn("check(s) failed", out)
+
+    def test_no_vendored_packs_fails(self):
+        out, err = self._run_doctor(vendored=[])
+        self.assertIsNotNone(err)
+        self.assertEqual(err.code, 1)
+        self.assertIn("vendored packs present", out)
+
+

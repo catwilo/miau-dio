@@ -38,5 +38,33 @@ class TestOpenUrl(unittest.TestCase):
                     p.open_url("https://example.com/")
 
 
+
+
+class TestAudioPlayer(unittest.TestCase):
+    def test_prefers_mpv(self):
+        with mock.patch.object(p.shutil, "which",
+                               side_effect=lambda x: x if x == "mpv" else None):
+            self.assertEqual(p.audio_player()[0], "mpv")
+
+    def test_falls_back_to_termux_media_player(self):
+        with mock.patch.object(p.shutil, "which",
+                               side_effect=lambda x: x if x == "termux-media-player" else None):
+            self.assertEqual(p.audio_player()[0], "termux-media-player")
+
+    def test_falls_back_to_sox_play(self):
+        with mock.patch.object(p.shutil, "which",
+                               side_effect=lambda x: x if x == "play" else None):
+            self.assertEqual(p.audio_player()[0], "play")
+
+    def test_falls_back_to_aplay(self):
+        with mock.patch.object(p.shutil, "which",
+                               side_effect=lambda x: x if x == "aplay" else None):
+            self.assertEqual(p.audio_player()[0], "aplay")
+
+    def test_raises_when_none_available(self):
+        with mock.patch.object(p.shutil, "which", return_value=None):
+            with self.assertRaises(RuntimeError) as cm:
+                p.audio_player()
+        self.assertIn("termux-api", str(cm.exception))
 if __name__ == "__main__":
     unittest.main()

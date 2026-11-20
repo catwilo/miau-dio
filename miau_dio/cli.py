@@ -732,6 +732,81 @@ def cmd_sample_remove(a):
 
 # ---- live ------------------------------------------------------------------
 
+def cmd_doctor(a):
+    """Verify all audio tooling works, with sound.
+
+    Runs each check in sequence, prints one line per check, exits 1 if
+    any check fails. Plays one random sample from each vendored pack so
+    the user hears the whole set.
+    """
+    from miau_dio.platform import platform as _platform
+
+    print("miau-dio doctor")
+    print()
+    checks = []
+
+    def _run(label, fn):
+        try:
+            fn()
+            checks.append((label, True, ""))
+            print(f"[ok]   {label}")
+        except Exception as e:  # noqa: BLE001
+            checks.append((label, False, str(e)))
+            print(f"[FAIL] {label}: {e}")
+
+    def _backends():
+        for name in ("abcmidi", "timidity"):
+            b = BACKENDS[name]
+            if not is_installed(b):
+                raise RuntimeError(f"missing backend: {name}")
+
+    _run("backends (abc2midi + timidity)", _backends)
+
+    def _pipeline():
+        td = tempfile.mkdtemp(prefix="miau-doctor-")
+        try:
+            abc = pathlib.Path(td) / "doctor.abc"
+            abc.write_text("X:1\nT:doctor\nM:4/4\nL:1/4\nK:C\nC|\n")
+            out = pathlib.Path(td) / "doctor.wav"
+            pipeline.render(str(abc), out=str(out))
+            if not out.is_file() or out.stat().st_size == 0:
+                raise RuntimeError("render produced empty wav")
+            prefix = _platform.audio_player()
+            subprocess.run([*prefix, str(out)], check=False)
+        finally:
+            shutil.rmtree(td, ignore_errors=True)
+
+    _run("pipeline (abc -> midi -> wav -> player)", _pipeline)
+
+    def _pack(pack):
+        def fn():
+            items = _samples.preview(pack, count=0)
+            if not items:
+                raise RuntimeError(f"no samples in {pack}")
+            try:
+                label, path = _random.choice(items)
+                print(f"       {label}")
+                prefix = _platform.audio_player()
+                subprocess.run([*prefix, str(path)], check=False)
+            finally:
+                _samples.preview_cleanup(items)
+        return fn
+
+    def _vendored_present():
+        if not _samples.vendored():
+            raise RuntimeError("no vendored packs")
+    _run("vendored packs present", _vendored_present)
+    for pack in _samples.vendored():
+        _run(f"sample: {pack}", _pack(pack))
+
+    failed = [c for c in checks if not c[1]]
+    print()
+    if failed:
+        print(f"[doctor] {len(failed)} check(s) failed")
+        raise SystemExit(1)
+    print(f"[doctor] all checks passed ({len(checks)})")
+
+
 def cmd_live(a):
     """Start a local Strudel server and open it in the system browser.
 
@@ -1034,6 +1109,13 @@ def build_parser() -> argparse.ArgumentParser:
                       help="bind a miau-dio project directory so the REPL "
                            "can save/load files in its patterns/ folder")
     live.set_defaults(func=cmd_live)
+
+    # ---- doctor ------------------------------------------------------------
+    top.add_parser(
+        "doctor",
+        help="verify everything works and play one sample from each "
+             "vendored pack",
+    ).set_defaults(func=cmd_doctor)
 
     return p
 

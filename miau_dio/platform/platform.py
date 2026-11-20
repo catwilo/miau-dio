@@ -49,19 +49,22 @@ def soundfont_path() -> pathlib.Path:
 def audio_player() -> list[str]:
     """Return a command prefix to play a wav file on this platform.
 
-    The file path is appended by the caller. Picks the first available
-    player; mpv is preferred because it is the canonical player of the
-    miau-dio stack (and is in Termux repos), then sox 'play' and aplay.
+    The file path is appended by the caller. Picks the first available:
+    mpv (canonical), termux-media-player (native Android, requires
+    termux-api), sox 'play' (cross-platform) or aplay (ALSA, Debian).
     """
     candidates = (
         ["mpv", "--no-video", "--really-quiet"],
-        ["play", "-q"],      # sox, works on Termux and Debian
-        ["aplay", "-q"],     # ALSA, common on Debian desktop
+        ["termux-media-player", "play"],  # native Termux (termux-api)
+        ["play", "-q"],                   # sox
+        ["aplay", "-q"],                  # ALSA, Debian
     )
     for c in candidates:
         if shutil.which(c[0]):
             return c
-    raise RuntimeError("no audio player found (install sox, alsa-utils or mpv)")
+    raise RuntimeError(
+        "no audio player found (install termux-api, mpv, sox or alsa-utils)"
+    )
 
 
 def open_url(url: str) -> None:

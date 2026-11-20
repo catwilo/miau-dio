@@ -166,4 +166,35 @@ def all_packs() -> list[Pack]:
     return sorted(CATALOG.values(), key=lambda p: p.name)
 
 
-__all__ = ["CATALOG", "Pack", "all_packs", "get"]
+# Groups for `miau-dio live --samples <group>`. Only vendored packs
+# (shipped in miau_dio/strudel/vendor/) are valid here; opt-in packs
+# (piano, mridangam) live in the XDG cache and are never auto-loaded.
+GROUPS: dict[str, tuple[str, ...]] = {
+    "drums":   ("uzu", "dirt"),
+    "brass":   ("trumpet", "trumpet_stac", "trombone", "trombone_stac"),
+    "strings": ("guitar",),
+    "all":     ("uzu", "dirt", "guitar", "trumpet", "trumpet_stac",
+                "trombone", "trombone_stac"),
+}
+
+
+def resolve_samples(spec: str) -> list[str]:
+    """Expand --samples value to a list of pack names.
+
+    Accepts 'none' / '' (empty), a group name ('drums', 'brass', 'strings',
+    'all'), or a comma-separated list of pack names. Raises KeyError for
+    unknown names so cli.py can exit with a clear message.
+    """
+    if not spec or spec == "none":
+        return []
+    if spec in GROUPS:
+        return list(GROUPS[spec])
+    names = [s.strip() for s in spec.split(",") if s.strip()]
+    for name in names:
+        if name not in CATALOG:
+            raise KeyError(f"unknown sample pack: {name!r}")
+    return names
+
+
+__all__ = ["CATALOG", "GROUPS", "Pack", "all_packs", "get",
+           "resolve_samples"]

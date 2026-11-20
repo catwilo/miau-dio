@@ -219,6 +219,14 @@ def _shim_hosts_js():
     return "[" + ", ".join(json.dumps(h) for h in SHIM_HOSTS) + "]"
 
 
+_PRELOAD_URLS: list[str] = []
+
+
+def _set_preload(urls) -> None:
+    global _PRELOAD_URLS
+    _PRELOAD_URLS = list(urls or [])
+
+
 def _render_index() -> bytes:
     """Serve site/index.html with our injected assets appended to <head>.
 
@@ -239,8 +247,11 @@ def _render_index() -> bytes:
     # external asset so the browser loads it synchronously.
     # /miau/fetch_shim.js returns the file with __SHIM_HOSTS__ replaced
     # with the actual list from SHIM_HOSTS (single source of truth).
+    preload_js = json.dumps(_PRELOAD_URLS)
     head = (
         '<script src="/miau/fetch_shim.js"></script>'
+        f'<script>window.__MIAU_PRELOAD__={preload_js};</script>'
+        '<script defer src="/miau/preload.js"></script>'
         '<script defer src="/miau/miau_bar.js"></script>'
     )
     patched = html[:inject_at] + head + html[inject_at:]
@@ -486,10 +497,12 @@ def _local_ipv4_addresses():
     return []
 
 
-def serve(port: int = 0, host: str = "127.0.0.1", project_dir=None):
+def serve(port: int = 0, host: str = "127.0.0.1", project_dir=None,
+          samples_list=None):
     if not (_SITE / "index.html").is_file():
         raise StrudelError(f"site missing: {_SITE / 'index.html'}")
     _set_project_dir(project_dir)
+    _set_preload(samples_list)
     try:
         srv = _Server((host, port), _Handler)
     except OSError as e:
@@ -500,8 +513,9 @@ def serve(port: int = 0, host: str = "127.0.0.1", project_dir=None):
 
 
 def serve_background(port: int = 0, host: str = "127.0.0.1",
-                     project_dir=None):
-    srv, url = serve(port=port, host=host, project_dir=project_dir)
+                     project_dir=None, samples_list=None):
+    srv, url = serve(port=port, host=host, project_dir=project_dir,
+                     samples_list=samples_list)
     th = threading.Thread(target=srv.serve_forever, daemon=True)
     th.start()
     return srv, url, th

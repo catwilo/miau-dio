@@ -829,8 +829,13 @@ def cmd_live(a):
                                    serve_background)
     from miau_dio.strudel.server import _local_ipv4_addresses
     try:
+        pack_names = _scatalog.resolve_samples(a.samples)
+    except KeyError as e:
+        raise SystemExit(f"live: {e}")
+    urls = [_scatalog.get(n).manifest_url for n in pack_names]
+    try:
         srv, url, _ = serve_background(port=a.port, host=a.host,
-                                        project_dir=a.at)
+                                        project_dir=a.at, samples_list=urls)
     except StrudelError as e:
         raise SystemExit(f"live: {e}")
     try:
@@ -846,6 +851,8 @@ def cmd_live(a):
         for ip in _local_ipv4_addresses():
             print(f"Network: http://{ip}:{port}/")
     print(f"Samples: {samples_dir()}")
+    if pack_names:
+        print(f"Preloading sample packs: {', '.join(pack_names)}")
     print("Press Ctrl+C to stop.")
     try:
         srv.serve_forever()
@@ -1108,6 +1115,12 @@ def build_parser() -> argparse.ArgumentParser:
     live.add_argument("--at", default=None,
                       help="bind a miau-dio project directory so the REPL "
                            "can save/load files in its patterns/ folder")
+    live.add_argument("--samples", default="none", metavar="SPEC",
+                      help="preload sample packs into the REPL: 'none' "
+                           "(default), a group ('drums', 'brass', 'strings', "
+                           "'all'), or a comma-separated list of names "
+                           "('uzu,dirt,guitar'). 'all' loads 7 packs "
+                           "(~155 MB in RAM).")
     live.set_defaults(func=cmd_live)
 
     # ---- doctor ------------------------------------------------------------

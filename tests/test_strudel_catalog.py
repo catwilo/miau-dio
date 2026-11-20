@@ -49,5 +49,41 @@ class TestAllPacks(unittest.TestCase):
         self.assertEqual(names, sorted(names))
 
 
+
+
+class TestResolveSamples(unittest.TestCase):
+    def test_none(self):
+        self.assertEqual(catalog.resolve_samples("none"), [])
+        self.assertEqual(catalog.resolve_samples(""), [])
+
+    def test_group_drums(self):
+        self.assertEqual(catalog.resolve_samples("drums"), ["uzu", "dirt"])
+
+    def test_group_brass(self):
+        self.assertEqual(
+            catalog.resolve_samples("brass"),
+            ["trumpet", "trumpet_stac", "trombone", "trombone_stac"],
+        )
+
+    def test_group_strings(self):
+        self.assertEqual(catalog.resolve_samples("strings"), ["guitar"])
+
+    def test_group_all_vendored(self):
+        names = catalog.resolve_samples("all")
+        self.assertEqual(sorted(names), sorted(catalog.GROUPS["all"]))
+
+    def test_comma_list(self):
+        self.assertEqual(catalog.resolve_samples("uzu,guitar"),
+                         ["uzu", "guitar"])
+
+    def test_comma_list_with_spaces(self):
+        self.assertEqual(catalog.resolve_samples("uzu , guitar"),
+                         ["uzu", "guitar"])
+
+    def test_unknown_name_raises(self):
+        with self.assertRaises(KeyError):
+            catalog.resolve_samples("nope")
+
+
 if __name__ == "__main__":
     unittest.main()

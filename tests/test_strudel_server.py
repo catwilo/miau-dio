@@ -45,6 +45,29 @@ class TestServe(_IsolatedCase):
         self.assertIn(b"/miau/fetch_shim.js", body)
         self.assertIn(b"/miau/miau_bar.js", body)
 
+    def test_index_injects_preload_default_empty(self):
+        status, body = self._get("/")
+        self.assertEqual(status, 200)
+        self.assertIn(b"__MIAU_PRELOAD__=[]", body)
+        self.assertIn(b"/miau/preload.js", body)
+
+    def test_index_preload_lists_configured_urls(self):
+        from miau_dio.strudel import server as srvmod
+        urls = ["https://example.test/pack.json"]
+        srvmod._set_preload(urls)
+        try:
+            status, body = self._get("/")
+            self.assertEqual(status, 200)
+            self.assertIn(b'__MIAU_PRELOAD__=["https://example.test/pack.json"]',
+                          body)
+        finally:
+            srvmod._set_preload([])
+
+    def test_preload_asset_served(self):
+        status, body = self._get("/miau/preload.js")
+        self.assertEqual(status, 200)
+        self.assertIn(b"__MIAU_PRELOAD__", body)
+
     def test_fetch_shim_asset_served_with_hosts(self):
         status, body = self._get("/miau/fetch_shim.js")
         self.assertEqual(status, 200)

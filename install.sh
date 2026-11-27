@@ -13,7 +13,12 @@
 set -euo pipefail
 
 _self="$0"
-case "$_self" in */*) ;; *) _self="$(command -v "$_self")" ;; esac
+case "$_self" in
+    */*) ;;
+    *) if [ -f "$_self" ]; then _self="$PWD/$_self"
+       else _self="$(command -v "$_self" 2>/dev/null || true)"; fi ;;
+esac
+[ -n "$_self" ] || { echo "[ERROR] cannot locate install.sh" >&2; exit 1; }
 if _real="$(readlink -f "$_self" 2>/dev/null)" && [ -n "$_real" ]; then
     _self="$_real"
 else
